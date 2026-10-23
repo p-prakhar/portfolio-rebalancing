@@ -33,6 +33,9 @@ VARIANTS = [
     ("Core-satellite, immediate fills", "core_satellite", "immediate", True),
     ("Core-satellite, secretary-rule fills", "core_satellite", "secretary", True),
     ("Core-satellite, TWAP fills", "core_satellite", "twap", True),
+    ("Core-satellite without core overlay", "core_xs", "immediate", True),
+    ("Static mix (55 Nifty/20 gold/10 S&P/15 cash)", "static_mix", "immediate", True),
+    ("Half Nifty + half risk parity", "rp_blend", "immediate", True),
 ]
 
 

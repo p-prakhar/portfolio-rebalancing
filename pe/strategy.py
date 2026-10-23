@@ -98,6 +98,29 @@ def build_target(px: pd.DataFrame, vix: pd.Series | None, settings: Settings, po
         return Target(w, risk_off=risk_off, why=why, scores=scores, dual=dm, regime=reg,
                       risk_reason=f"dual momentum prefers {dm['choice']} to {dm_cfg['equity']}" if risk_off else "")
 
+    if policy == "static_mix":
+        c = st["static_mix"]
+        w = {k: float(v) for k, v in c["weights"].items() if k in px and px[k].iloc[-1] == px[k].iloc[-1]}
+        w["CASH"] = w.get("CASH", 0.0) + 1 - sum(w.values())
+        return Target(w, why=why + [f"Fixed mix {', '.join(f'{k} {v:.0%}' for k, v in w.items())}: no forecasting. Only trades when drift from target is large "
+                                    "enough to beat costs and tax, which is why it suits a taxable account."], dual=dm, regime=reg)
+
+    if policy == "core_xs":   # core_satellite without the core trend overlay: the core is never sold on a signal
+        saved = st.get("core_overlay")
+        st["core_overlay"] = "none"
+        try:
+            return build_target(px, vix, settings, "core_satellite", held_weights)
+        finally:
+            st["core_overlay"] = saved
+
+    if policy == "rp_blend":   # half Nifty, half risk parity
+        c = st["rp_blend"]
+        rp = _risk_parity(px, settings, [], dm, reg)
+        w = {k: v * (1 - c["nifty_weight"]) for k, v in rp.weights.items()}
+        w[c["nifty_symbol"]] = w.get(c["nifty_symbol"], 0.0) + c["nifty_weight"]
+        return Target(w, why=why + [f"{c['nifty_weight']:.0%} stays in {c['nifty_symbol']} (tax deferral, upside), the rest follows risk parity. " + " ".join(rp.why)],
+                      dual=dm, regime=reg)
+
     if policy == "custom":
         return _custom(px, settings, why, dm, reg, held_weights or {})
     if policy == "trend_vol":
@@ -145,7 +168,8 @@ def _trend_vol(px, settings, why, dm, reg) -> Target:
     rets = px[up].pct_change().iloc[-c["vol_window"]:]
     iv = 1 / (rets.std() * np.sqrt(252))
     w = _cap((iv / iv.sum()).to_dict(), c["max_weight"])
-    port_vol = float(np.sqrt(np.array(list(w.values())) @ (rets[list(w)].cov().values * 252) @ np.array(list(w.values()))))
+    wv = pd.Series(w).reindex(up).fillna(0.0).values        # _cap may have parked excess in CASH, which is not in `up`
+    port_vol = float(np.sqrt(wv @ (rets[up].cov().values * 252) @ wv))
     scale = min(1.0, c["target_vol"] / port_vol) if port_vol > 0 else 1.0
     w = {s: x * scale for s, x in w.items()}
     w["CASH"] = w.get("CASH", 0.0) + 1 - sum(w.values())

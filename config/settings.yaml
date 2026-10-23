@@ -70,11 +70,14 @@ cash:
   rate: 0.065                    # annual pre-tax yield of the cash vehicle
 
 strategy:
-  policy: core_satellite         # buy_hold | custom | dual_momentum | xs_momentum | core_satellite | trend_vol | risk_parity | daa
+  policy: core_xs         # buy_hold | custom | dual_momentum | xs_momentum | core_satellite | core_xs | static_mix | rp_blend | trend_vol | risk_parity | daa
   core_symbol: NIFTYBEES
   core_weight: 0.60              # left alone (tax deferral) unless the regime overlay says risk-off
   core_overlay: dual_momentum    # none | dual_momentum : core rotates to gold/cash in a confirmed downtrend
   dual_momentum: {equity: NIFTYBEES, gold: GOLDBEES, cash: CASH, lookback: 252, sma: 200}
+  static_mix:                    # fixed weights, drift-triggered rebalance (classic permanent-portfolio style)
+    weights: {NIFTYBEES: 0.55, GOLDBEES: 0.20, SPY: 0.10, CASH: 0.15}
+  rp_blend: {nifty_symbol: NIFTYBEES, nifty_weight: 0.5}
   xs:
     top_k: 3
     lookbacks: [126, 252]        # 6m and 12m, NSE momentum-ratio style (return / volatility)

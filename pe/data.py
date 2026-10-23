@@ -78,9 +78,26 @@ def fetch_closes(settings: Settings, refresh: bool = False) -> pd.DataFrame:
     return pd.DataFrame(out).sort_index()
 
 
+def drop_bad_prints(closes: pd.DataFrame, tol: float = 2.0) -> pd.DataFrame:
+    """Blank out isolated one-day prints that are off by more than `tol`x from their neighbours.
+
+    Yahoo occasionally returns a face-value-split artefact for a single day (e.g. NIFTYBEES and GOLDBEES on
+    2019-12-19 print at 1/10 and 1/100 of the real price, then recover). A real split or crash is a lasting step,
+    so it is not flagged: the median of the surrounding 5 days follows it.
+    """
+    med = closes.rolling(5, center=True, min_periods=3).median()
+    ratio = closes / med
+    bad = (ratio < 1 / tol) | (ratio > tol)
+    if bad.values.any():
+        n = int(bad.values.sum())
+        log.warning("Dropped %d isolated bad price prints (%s)", n, ", ".join(sorted(bad.columns[bad.any()])))
+    return closes.mask(bad)
+
+
 def build_prices(settings: Settings, closes: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series | None]:
     """INR prices per symbol on the NSE calendar, plus India VIX if available."""
     cfg = settings["data"]
+    closes = drop_bad_prints(closes)
     fx = closes.get(cfg["fx_ticker"])
     anchor = closes.get("NIFTYBEES.NS")
     cal = anchor.dropna().index if anchor is not None and anchor.notna().any() else closes.dropna(how="all").index

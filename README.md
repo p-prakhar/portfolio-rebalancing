@@ -5,6 +5,26 @@ A periodically-run decision-support tool. It reads your tax lots, pulls free dai
 trade, when, and why**, with transaction costs and Indian capital-gains tax worked out for
 every trade. It never places orders; you make every call.
 
+## Start here
+
+```bash
+python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
+python main.py            # guided shell with autocomplete (Tab) and Up-arrow history
+```
+
+Inside the shell, in this order: `profile` (age, risk appetite, employer stock) → `import-kite` (Zerodha tradebook CSVs) →
+`import-etrade` (RSU vests from E*TRADE Benefit History) → `add-other` (FD, PPF, EPF, NPS, mutual funds, gold, property; each
+question says where to find the number, or type `where`) → `site`, which builds and opens `reports/index.html`.
+
+The page answers one question first: **is rebalancing worth it, yes or no, and why.** Below it: where the money moves (before and
+after), every factor considered, a replay of the last 12 months with a dot on each day money moved (click a dot for the reason, the
+price chart around it and an optional live TradingView chart), the 10-year evidence, and a tick-off checklist of the exact orders.
+It is one offline HTML file. Everything personal stays on your machine and is git-ignored.
+
+`python main.py validate` runs every strategy from a lump sum over 10 years and over rolling 3-year windows, and labels each
+"robust edge", "promising, not proven", "cuts drawdown at little cost" or "no reliable edge". Read `reports/validation.md`: most
+fancy strategies do not beat buy & hold after Indian tax once you look beyond one year, and the page says so.
+
 ## Quick start
 
 ```bash

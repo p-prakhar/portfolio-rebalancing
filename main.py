@@ -2,6 +2,9 @@
 
     python main.py run                # today's check -> reports/latest.md (schedule this daily/weekly)
     python main.py backtest           # last 1 year, all strategy variants -> reports/backtest.md
+    python main.py                    # guided shell (autocomplete): profile, imports, check, site
+    python main.py site --open        # visual decision page
+    python main.py validate           # 10-year rolling-window robustness test
     python main.py reset-window       # after you have placed the trades, clear the execution window
     add --demo to any command to use synthetic prices (code smoke test only)
 """
@@ -52,6 +55,10 @@ def timing_step(plan, px, settings) -> list[str]:
     actionable = [t for t in plan.trades if not t.kind.startswith("harvest")]
     today = str(plan.as_of)
     state = json.loads(STATE.read_text()) if STATE.exists() else None
+    legs_now = sorted((t.symbol, t.side, t.kind) for t in actionable)
+    if state is not None and sorted((l["symbol"], l["side"], l["kind"]) for l in state["legs"]) != legs_now:
+        state = None        # the plan changed (new policy, new signals): an old window no longer applies
+        STATE.unlink(missing_ok=True)
     if state is None and actionable:
         if tm["execution"] != "secretary":
             return ["Execution mode is immediate: place the trades at the next session."]
@@ -138,9 +145,45 @@ def cmd_backtest(args):
     print(f"\nData: {note}\nSaved {p}")
 
 
+def cmd_site(args):
+    """Today's plan + 12-month replay (+ 10-year validation if present) -> reports/index.html."""
+    import json as _json
+    from pe import site
+    from pe.backtest import run_all
+    from pe.profile import load_other, load_profile
+    settings = load_settings()
+    if args.policy:
+        settings.strategy["policy"] = args.policy
+    h = load_holdings(args.holdings)
+    register_assets(settings, h)
+    px, vix, fx, note = load_data(settings, args.demo, args.refresh)
+    h = resolve_amount_lots(h, px)
+    usd = float(fx.iloc[-1]) if fx is not None else None
+    plan = make_plan(px.index[-1], h.lots, h.cash_inr, px, vix, settings, _fy_realised(h), lrs_used=h.lrs_remitted_this_fy_inr, usd_inr=usd)
+    timing = timing_step(plan, px, settings) if not args.demo else []
+    start = px.index[-1] - timedelta(days=args.days)
+    curves, table, logs = run_all(h.lots, px, vix, settings, start, fx)
+    vpath = ROOT / "reports" / "validation.json"
+    validation = _json.loads(vpath.read_text()) if vpath.exists() else None
+    data = site.build(plan, settings, timing, px, (curves, table, logs, start), load_profile(), load_other(), validation, note, usd)
+    out = site.render(data, ROOT / settings["report"]["out_dir"] / "index.html")
+    print(f"Decision: {data['verdict']['call']} - {data['verdict']['headline']}\nSaved {out}")
+    return out
+
+
+def cmd_validate(args):
+    from pe import validate
+    res = validate.validate(years=args.years, window_years=args.window_years, refresh=args.refresh)
+    validate.save(res)
+    print(validate.report(res, validate.VARIANTS[0][0]))
+    print("\nSaved reports/validation.md and validation.json")
+
+
 def main():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    if len(__import__("sys").argv) == 1:
+        __import__("sys").argv.append("shell")
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name in ("run", "backtest"):
         sp = sub.add_parser(name)
@@ -148,10 +191,17 @@ def main():
         sp.add_argument("--refresh", action="store_true", help="ignore the price cache")
         sp.add_argument("--holdings", help="holdings file (default config/holdings.yaml)")
         if name == "run":
-            sp.add_argument("--policy", choices=["buy_hold", "custom", "dual_momentum", "xs_momentum", "core_satellite", "trend_vol", "risk_parity", "daa"])
+            sp.add_argument("--policy", choices=["buy_hold", "custom", "dual_momentum", "xs_momentum", "core_satellite", "core_xs", "static_mix", "rp_blend", "trend_vol", "risk_parity", "daa"])
             sp.add_argument("--asof", help="pretend today is this date (YYYY-MM-DD)")
         else:
             sp.add_argument("--days", type=int, default=365)
+    sp = sub.add_parser("site", help="build reports/index.html: the visual decision page")
+    sp.add_argument("--demo", action="store_true"); sp.add_argument("--refresh", action="store_true")
+    sp.add_argument("--holdings"); sp.add_argument("--policy"); sp.add_argument("--days", type=int, default=365)
+    sp.add_argument("--open", action="store_true", help="open the page in your browser")
+    vp = sub.add_parser("validate", help="10-year rolling-window robustness test of every strategy (slow the first time)")
+    vp.add_argument("--years", type=int, default=10); vp.add_argument("--window-years", type=int, default=3); vp.add_argument("--refresh", action="store_true")
+    sub.add_parser("shell", help="guided interactive shell with autocomplete: profile, imports, check, site")
     sub.add_parser("reset-window")
     ip = sub.add_parser("import-tradebook", help="build holdings lots from a broker tradebook CSV (FIFO)")
     ip.add_argument("csv")
@@ -172,6 +222,16 @@ def main():
         cmd_run(args)
     elif args.cmd == "backtest":
         cmd_backtest(args)
+    elif args.cmd == "site":
+        out = cmd_site(args)
+        if args.open:
+            import webbrowser
+            webbrowser.open(out.as_uri())
+    elif args.cmd == "validate":
+        cmd_validate(args)
+    elif args.cmd == "shell":
+        from pe.tui import run_shell
+        run_shell()
     elif args.cmd == "import-tradebook":
         from pe.importer import lots_from_tradebook, write_holdings
         out = Path(args.out)

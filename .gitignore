@@ -9,3 +9,7 @@ config/holdings.yaml.bak
 reports/
 state/
 data/gold_city_prices.csv
+config/profile.yaml
+config/other_assets.yaml
+state/history
+data/cache*/
