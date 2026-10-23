@@ -1,0 +1,11 @@
+.venv/
+data/cache/
+__pycache__/
+.pytest_cache/
+*.pyc
+# personal: real holdings, generated reports, run state, logged prices
+config/holdings.yaml
+config/holdings.yaml.bak
+reports/
+state/
+data/gold_city_prices.csv

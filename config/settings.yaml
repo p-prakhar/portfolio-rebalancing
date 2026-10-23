@@ -1,0 +1,121 @@
+# Portfolio engine settings. Every number here is an assumption you can change.
+# Tax figures follow the Finance (No. 2) Act 2024 / Finance Act 2025 regime as
+# understood at the time of writing. VERIFY WITH A CA before acting; budgets change.
+
+data:
+  cache_dir: data/cache
+  manual_dir: data/manual        # drop <SYMBOL>.csv (Date,Close) here to override / fill gaps
+  history_start: "2023-06-01"    # needs ~13 months before the first signal date
+  fx_ticker: "INR=X"             # Yahoo USD->INR
+  vix_ticker: "^INDIAVIX"
+  cache_max_age_hours: 12
+
+tax:
+  fy_start_month: 4              # Indian FY: April - March
+  slab_rate: 0.30                # your marginal slab (STCG on gold/intl/foreign, debt funds)
+  cess: 0.04
+  surcharge: 0.0                 # 0.10 above 50L income, 0.15 above 1Cr (capped at 15% for 111A/112A)
+  equity_stcg_rate: 0.20         # Sec 111A
+  equity_ltcg_rate: 0.125        # Sec 112A
+  ltcg_exemption: 125000         # Sec 112A annual exemption (per individual)
+  other_ltcg_rate: 0.125         # gold ETF, intl ETF, foreign shares (no indexation)
+  holding_months:                # strictly MORE than this many months => long term
+    in_equity: 12                # listed shares, equity ETFs, arbitrage funds
+    in_other: 12                 # listed gold / silver / international ETFs (from FY25-26)
+    foreign: 24                  # US shares/ETFs held via IBKR etc.
+    in_debt: null                # specified MF / liquid ETF: always slab, no LT
+  discount_rate: 0.07            # used to value tax deferral
+  default_deferral_years: 5      # if you don't sell now, roughly when would you?
+  lrs_tcs_threshold: 1000000     # LRS remittances above this per FY attract TCS
+  lrs_tcs_rate: 0.20             # TCS is a credit against tax, but it is a cash-flow drag
+
+costs:
+  nse_etf:      {brokerage: 0.0, stt_buy: 0.0,   stt_sell: 0.00001, exch: 0.0000297, sebi: 0.000001, stamp_buy: 0.00015, gst: 0.18, dp_per_sell: 15.93, half_spread: 0.0004}
+  nse_nonequity_etf: {brokerage: 0.0, stt_buy: 0.0, stt_sell: 0.0, exch: 0.0000297, sebi: 0.000001, stamp_buy: 0.00015, gst: 0.18, dp_per_sell: 15.93, half_spread: 0.0005}
+  nse_stock:    {brokerage: 0.0, stt_buy: 0.001, stt_sell: 0.001,   exch: 0.0000297, sebi: 0.000001, stamp_buy: 0.00015, gst: 0.18, dp_per_sell: 15.93, half_spread: 0.0003}
+  ibkr_us:      {commission_per_share_usd: 0.005, min_commission_usd: 1.0, max_commission_pct: 0.01, sec_fee_sell: 0.0000278, half_spread: 0.0002, fx_one_way: 0.0035}
+  cash_fund:    {half_spread: 0.0, exit_load: 0.0}
+
+# Universe the algorithms choose from. tax_class: in_equity | in_other | in_debt | foreign
+# venue picks the cost model. rotate: false = evaluated if held, never bought by the rotation.
+universe:
+  - {symbol: NIFTYBEES,  ticker: NIFTYBEES.NS,  name: "Nifty 50 ETF",              tax_class: in_equity, venue: nse_etf,           sleeve: india_equity}
+  # Same index as NIFTYBEES from another AMC: shares NIFTYBEES's target weight, never rotated on its own.
+  # Also the natural same-day swap partner for tax harvesting.
+  - {symbol: SETFNIF50,  ticker: SETFNIF50.NS,  name: "SBI Nifty 50 ETF",          tax_class: in_equity, venue: nse_etf,           sleeve: india_equity, rotate: false, equivalent_of: NIFTYBEES}
+  - {symbol: JUNIORBEES, ticker: JUNIORBEES.NS, name: "Nifty Next 50 ETF",         tax_class: in_equity, venue: nse_etf,           sleeve: india_equity}
+  - {symbol: MID150BEES, ticker: MID150BEES.NS, name: "Nifty Midcap 150 ETF",      tax_class: in_equity, venue: nse_etf,           sleeve: india_equity}
+  - {symbol: MOM30IETF,  ticker: MOM30IETF.NS,  name: "Nifty200 Momentum 30 ETF",  tax_class: in_equity, venue: nse_etf,           sleeve: india_equity}
+  - {symbol: LOWVOLIETF, ticker: LOWVOLIETF.NS, name: "Nifty Low Vol 30 ETF",      tax_class: in_equity, venue: nse_etf,           sleeve: india_equity}
+  - {symbol: BANKBEES,   ticker: BANKBEES.NS,   name: "Bank Nifty ETF",            tax_class: in_equity, venue: nse_etf,           sleeve: india_equity}
+  - {symbol: ITBEES,     ticker: ITBEES.NS,     name: "Nifty IT ETF",              tax_class: in_equity, venue: nse_etf,           sleeve: india_equity}
+  - {symbol: PSUBNKBEES, ticker: PSUBNKBEES.NS, name: "PSU Bank ETF",              tax_class: in_equity, venue: nse_etf,           sleeve: india_equity}
+  - {symbol: CPSEETF,    ticker: CPSEETF.NS,    name: "CPSE ETF",                  tax_class: in_equity, venue: nse_etf,           sleeve: india_equity}
+  - {symbol: PHARMABEES, ticker: PHARMABEES.NS, name: "Nifty Pharma ETF",          tax_class: in_equity, venue: nse_etf,           sleeve: india_equity}
+  - {symbol: GOLDBEES,   ticker: GOLDBEES.NS,   name: "Gold ETF",                  tax_class: in_other,  venue: nse_nonequity_etf, sleeve: gold}
+  - {symbol: SILVERBEES, ticker: SILVERBEES.NS, name: "Silver ETF",                tax_class: in_other,  venue: nse_nonequity_etf, sleeve: commodity}
+  - {symbol: MON100,     ticker: MON100.NS,     name: "Nasdaq 100 ETF (NSE-listed, can trade at a premium)", tax_class: in_other, venue: nse_nonequity_etf, sleeve: global_equity}
+  - {symbol: SPY,  ticker: SPY, name: "S&P 500 (via IBKR)",      tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: global_equity}
+  - {symbol: QQQ,  ticker: QQQ, name: "Nasdaq 100 (via IBKR)",   tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: global_equity}
+  - {symbol: EFA,  ticker: EFA, name: "Developed ex-US (via IBKR)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: global_equity}
+  - {symbol: EEM,  ticker: EEM, name: "Emerging markets (via IBKR)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: global_equity}
+  - {symbol: GLD,  ticker: GLD, name: "Gold (via IBKR)",         tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: gold}
+  - {symbol: TLT,  ticker: TLT, name: "US 20y Treasuries (via IBKR)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: bonds}
+  - {symbol: TCS,  ticker: TCS.NS, name: "Tata Consultancy Services", tax_class: in_equity, venue: nse_stock, sleeve: india_equity, rotate: false}
+  # Synthetic cash: accrues at cash.rate. Default models an ARBITRAGE FUND, which is taxed
+  # like equity (20%/12.5%) instead of at slab like a liquid fund. See docs/EDGES.md.
+  - {symbol: CASH, ticker: null, name: "Cash sleeve (arbitrage fund proxy)", tax_class: in_equity, venue: cash_fund, sleeve: cash}
+
+cash:
+  rate: 0.065                    # annual pre-tax yield of the cash vehicle
+
+strategy:
+  policy: core_satellite         # buy_hold | custom | dual_momentum | xs_momentum | core_satellite | trend_vol | risk_parity | daa
+  core_symbol: NIFTYBEES
+  core_weight: 0.60              # left alone (tax deferral) unless the regime overlay says risk-off
+  core_overlay: dual_momentum    # none | dual_momentum : core rotates to gold/cash in a confirmed downtrend
+  dual_momentum: {equity: NIFTYBEES, gold: GOLDBEES, cash: CASH, lookback: 252, sma: 200}
+  xs:
+    top_k: 3
+    lookbacks: [126, 252]        # 6m and 12m, NSE momentum-ratio style (return / volatility)
+    skip_recent: 21              # skip the last month (short-term reversal)
+    weighting: inverse_vol       # equal | inverse_vol
+    max_per_sleeve: {global_equity: 0.5, gold: 0.5, commodity: 0.25, bonds: 0.5}
+  custom:                        # for any portfolio you supply: keep what you own, sell on converging evidence
+    min_flags: 2                 # of: technical downtrend, trailing stop breached, weak momentum
+    max_single_stock: 0.10       # trim single stocks above this weight
+    overlay: dual_momentum       # none | dual_momentum : cut equity when the market trend breaks
+    risk_off_cut: 0.5
+    exit_to: CASH
+  # --- crash-aware policies (see docs/THEORIES.md) ---
+  trend_vol:                     # Faber-style 10-month trend filter per asset + portfolio volatility targeting
+    assets: [NIFTYBEES, MID150BEES, LOWVOLIETF, GOLDBEES, SILVERBEES, SPY, EFA, EEM, TLT]
+    sma: 210
+    target_vol: 0.10             # annual; exposure is scaled down when markets get rough
+    vol_window: 63
+    max_weight: 0.35
+  risk_parity:                   # inverse-volatility across asset classes, no forecasting
+    assets: [NIFTYBEES, LOWVOLIETF, GOLDBEES, SPY, TLT]
+    vol_window: 126
+    max_weight: 0.40
+  daa:                           # Keller's Defensive Asset Allocation: "canary" breadth momentum
+    canary: [EEM, TLT]
+    risky: [NIFTYBEES, MID150BEES, MOM30IETF, LOWVOLIETF, SPY, QQQ, EFA, EEM, GOLDBEES]
+    defensive: [CASH, GOLDBEES, TLT]
+    top_risky: 3
+  min_trade_weight: 0.03         # ignore drifts smaller than 3% of the portfolio
+  expected_alpha_shrink: 0.25    # haircut on trailing momentum spread when estimating edge
+  alpha_cap: 0.12                # never assume more than 12%/yr excess from a switch
+  horizon_months: 6              # how long a rotation is expected to be held
+  switch_safety: 1.25            # expected benefit must beat cost x this
+
+timing:
+  check_frequency: monthly       # signal checks in the backtest: monthly | weekly
+  execution: secretary           # immediate | secretary | twap
+  window_days: 10                # execution window once a rebalance is approved
+  ltcg_wait_max_days: 75         # consider waiting for long-term status if within this many days
+  regime_override_secretary: true  # risk-off exits execute immediately, no waiting for a better price
+
+report:
+  out_dir: reports
+  telegram: false                # set TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID env vars and true to push

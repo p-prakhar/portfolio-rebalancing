@@ -1,0 +1,19 @@
+# Example tax lots with made-up numbers. Copy to config/holdings.yaml (git-ignored) and put your real lots there.
+# One entry per purchase. Give either `qty` + `price` (INR per unit; for USD assets use the INR cost per unit
+# at the SBI TT buying rate) or `amount_inr`, in which case quantity is derived from the closing price on buy_date.
+
+lots:
+  - {symbol: NIFTYBEES, buy_date: "2024-08-14", amount_inr: 500000}
+  - {symbol: SETFNIF50, buy_date: "2024-08-14", amount_inr: 500000}
+  - {symbol: TCS,       buy_date: "2024-09-16", amount_inr: 50000}
+
+cash_inr: 0
+
+# Capital gains already realised this FY outside this portfolio (affects exemption use).
+realised_this_fy:
+  equity_stcg: 0
+  equity_ltcg: 0
+  other_stcg: 0
+  other_ltcg: 0
+
+lrs_remitted_this_fy_inr: 0

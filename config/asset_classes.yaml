@@ -1,0 +1,151 @@
+# Catalogue of investable asset classes for an Indian resident, evaluated by one generic
+# after-tax cash-flow framework (pe/assetclasses.py). Property abroad, farmland and physical
+# gold have their own detailed frameworks (config/real_assets.yaml) and are merged into the same
+# report. Rates are annual; amounts in INR. Yields marked (Oct 2026) were checked then; other
+# numbers are estimates to edit. Sources: docs/REAL_ASSETS.md.
+#
+# Fields
+#   growth        : price growth per year; a number, {base, bear, bull}, or the name of a
+#                   scenario series below (e.g. equity)
+#   income_yield  : cash income per year as a share of value (or of principal: income_basis)
+#   income_tax    : slab | exempt | mixed:<share taxed at slab> | none
+#   income_paid   : true = paid out to you; false = accrues inside (tax still due yearly if taxable)
+#   credit_loss   : expected default loss per year, as a share of value
+#   gains_tax     : equity | listed_12m | unlisted_24m | slab | crypto | exempt
+#   eligible      : can you use it at ~Rs 17 lakh of investable money? (yes | needs <amount> | note)
+
+amount_inr: 500000          # ticket used to compare everything (min-ticket rules are checked against it)
+
+scenarios:                   # annual figures; INR depreciation applies to USD assets
+  base: {equity: 0.11, midsmall: 0.12, global_usd: 0.08, inr_vs_usd: 0.03, gold_inr: 0.08, silver_inr: 0.07,
+         property_india: 0.06, reit_price: 0.02, crypto: 0.10, unlisted: 0.10}
+  bear: {equity: 0.04, midsmall: 0.0, global_usd: 0.0, inr_vs_usd: 0.05, gold_inr: 0.10, silver_inr: 0.03,
+         property_india: 0.0, reit_price: -0.02, crypto: -0.15, unlisted: -0.10}
+  bull: {equity: 0.14, midsmall: 0.16, global_usd: 0.11, inr_vs_usd: 0.015, gold_inr: 0.05, silver_inr: 0.10,
+         property_india: 0.09, reit_price: 0.04, crypto: 0.30, unlisted: 0.20}
+
+classes:
+  # ------------------------------------------------------------------ Indian equity
+  - {key: nifty_etf, name: "Nifty 50 ETF / index fund", group: Indian equity, growth: equity, annual_cost_pct: 0.0005,
+     entry_cost_pct: 0.0005, exit_cost_pct: 0.0005, gains_tax: equity, liquidity: "T+1", min_ticket: 300, eligible: "yes",
+     turbulence: "falls with the market; the trend overlay in the main engine is the defence"}
+  - {key: midsmall_index, name: "Midcap/smallcap index fund", group: Indian equity, growth: midsmall, annual_cost_pct: 0.003,
+     gains_tax: equity, liquidity: "T+1 to T+3", min_ticket: 500, eligible: "yes",
+     turbulence: "deeper drawdowns (-50% to -60% historically); size it small in rough markets"}
+  - {key: momentum_factor, name: "Momentum / low-vol factor ETFs", group: Indian equity, growth: {base: 0.125, bear: -0.01, bull: 0.18},
+     annual_cost_pct: 0.003, gains_tax: equity, liquidity: "T+1", min_ticket: 100, eligible: "yes",
+     turbulence: "momentum crashes in sharp rebounds; low-vol falls least"}
+  - {key: active_mf, name: "Active equity mutual fund (direct plan)", group: Indian equity, growth: equity, annual_cost_pct: 0.007,
+     gains_tax: equity, liquidity: "T+2", min_ticket: 500, eligible: "yes",
+     turbulence: "fund can't go to cash; most large-cap active funds trail the index after fees"}
+  - {key: direct_stocks, name: "Direct stocks (diversified 15-25)", group: Indian equity, growth: equity, entry_cost_pct: 0.0013,
+     exit_cost_pct: 0.0013, gains_tax: equity, liquidity: "T+1", min_ticket: 1000, eligible: "yes",
+     turbulence: "single-stock risk; the custom policy's stops and trims manage it"}
+  - {key: sif, name: "Specialised Investment Fund (SIF, long-short)", group: Indian equity, growth: {base: 0.10, bear: 0.04, bull: 0.13},
+     annual_cost_pct: 0.015, gains_tax: equity, liquidity: "varies by fund", min_ticket: 1000000, eligible: "needs Rs 10 lakh in one fund",
+     turbulence: "can short up to 25%, so it should fall less; track record is short (category launched 2025)"}
+  - {key: unlisted_preipo, name: "Unlisted / pre-IPO shares", group: Indian equity, growth: unlisted, entry_cost_pct: 0.10,
+     exit_cost_pct: 0.08, gains_tax: unlisted_24m, liquidity: "weeks to months; 6-month lock-in after IPO", min_ticket: 25000,
+     eligible: "yes, keep it small", turbulence: "IPO windows shut in bad markets, so exits disappear exactly when you want them"}
+  - {key: pms_aif, name: "PMS / AIF Cat III", group: Indian equity, growth: equity, annual_cost_pct: 0.025, gains_tax: equity,
+     liquidity: "weeks", min_ticket: 5000000, eligible: "needs Rs 50 lakh (PMS) / Rs 1 crore (AIF)", turbulence: "-"}
+  # ------------------------------------------------------------------ global
+  - {key: us_equity_lrs, name: "US/global equity via IBKR (UCITS, accumulating)", group: Global equity, growth: global_usd, currency: USD,
+     annual_cost_pct: 0.0007, entry_cost_pct: 0.006, exit_cost_pct: 0.006, gains_tax: unlisted_24m, liquidity: "T+1 plus 1-3 days to repatriate",
+     min_ticket: 10000, eligible: "yes (Schedule FA every year)",
+     turbulence: "the rupee usually falls in global sell-offs, cushioning INR losses"}
+  - {key: intl_fof, name: "International fund of funds (Indian AMC)", group: Global equity, growth: global_usd, currency: USD, no_tcs: true,
+     annual_cost_pct: 0.008, gains_tax: unlisted_24m, liquidity: "T+5", min_ticket: 500,
+     eligible: "yes, when the AMC is accepting money (overseas limits)", turbulence: "same rupee cushion, no LRS paperwork or TCS"}
+  # ------------------------------------------------------------------ debt and deposits
+  - {key: savings_account, name: "Savings account", group: Debt and deposits, income_yield: 0.03, income_tax: slab, income_paid: true,
+     gains_tax: exempt, liquidity: "instant", min_ticket: 0, eligible: "yes", turbulence: "safe, loses to inflation"}
+  - {key: bank_fd, name: "Bank FD, large bank (cumulative)", group: Debt and deposits, income_yield: 0.066, income_tax: slab, income_paid: false,
+     gains_tax: exempt, liquidity: "premature exit with ~0.5-1% penalty", min_ticket: 1000, eligible: "yes",
+     turbulence: "capital-safe; interest taxed every year even if not paid out"}
+  - {key: sfb_fd, name: "Small finance bank FD (within Rs 5L DICGC cover)", group: Debt and deposits, income_yield: 0.08, income_tax: slab,
+     income_paid: false, gains_tax: exempt, liquidity: "premature exit with penalty", min_ticket: 1000,
+     eligible: "yes, max Rs 5 lakh per bank incl. interest", turbulence: "insured up to Rs 5 lakh per bank"}
+  - {key: corporate_fd, name: "AAA corporate FD / NBFC deposit", group: Debt and deposits, income_yield: 0.0775, income_tax: slab,
+     income_paid: false, credit_loss: 0.001, gains_tax: exempt, liquidity: "lock-in, limited premature exit", min_ticket: 10000,
+     eligible: "yes", turbulence: "no deposit insurance; credit spreads widen in crises"}
+  - {key: gsec_10y, name: "G-sec / SDL via RBI Retail Direct (hold to maturity)", group: Debt and deposits, income_yield: 0.0738,
+     income_tax: slab, income_paid: true, gains_tax: listed_12m, liquidity: "sell on NDS-OM; price moves with rates", min_ticket: 10000,
+     eligible: "yes", turbulence: "no credit risk. The 10-year yield is at a 2-year high (~7.4%, Oct 2026); if rates fall later, the price rises too"}
+  - {key: liquid_fund, name: "Liquid / money-market fund", group: Debt and deposits, growth: 0.064, annual_cost_pct: 0.002, gains_tax: slab,
+     liquidity: "T+1", min_ticket: 500, eligible: "yes", turbulence: "cash parking; taxed at slab"}
+  - {key: arbitrage_fund, name: "Arbitrage fund", group: Debt and deposits, growth: 0.068, annual_cost_pct: 0.004, gains_tax: equity,
+     liquidity: "T+2", min_ticket: 500, eligible: "yes", turbulence: "cash-like, taxed as equity; spreads can vanish in panics"}
+  - {key: target_maturity, name: "Target-maturity debt fund / Bharat Bond ETF", group: Debt and deposits, growth: 0.072, annual_cost_pct: 0.002,
+     gains_tax: slab, liquidity: "T+1 to T+3", min_ticket: 1000, eligible: "yes", turbulence: "locks today's high yields with no credit risk (PSU/G-sec)"}
+  - {key: listed_ncd, name: "Listed NCDs / bonds rated A-AA (bond platforms)", group: Debt and deposits, income_yield: 0.10, income_tax: slab,
+     income_paid: true, credit_loss: 0.012, gains_tax: listed_12m, liquidity: "thin secondary market", min_ticket: 10000,
+     eligible: "yes", turbulence: "defaults cluster in downturns; diversify across 10+ issuers"}
+  - {key: tax_free_bonds, name: "Tax-free PSU bonds (secondary market)", group: Debt and deposits, income_yield: 0.055, income_tax: exempt,
+     income_paid: true, gains_tax: listed_12m, liquidity: "thin; trades at a premium", min_ticket: 1000, eligible: "yes",
+     turbulence: "5.5% tax-free = ~8% taxable at a 30% slab, AAA PSU credit; no new issues since 2016"}
+  - {key: frsb, name: "RBI Floating Rate Savings Bond", group: Debt and deposits, income_yield: 0.0805, income_tax: slab, income_paid: true,
+     gains_tax: exempt, liquidity: "7-year lock-in, not tradable", min_ticket: 1000, eligible: "yes", turbulence: "sovereign; rate resets with NSC"}
+  - {key: p2p, name: "P2P lending (RBI-registered NBFC-P2P)", group: Debt and deposits, income_yield: 0.12, income_tax: slab, income_paid: true,
+     credit_loss: 0.045, annual_cost_pct: 0.01, gains_tax: exempt, liquidity: "until loans repay; no secondary market",
+     min_ticket: 10000, eligible: "yes, max Rs 50 lakh across platforms", turbulence: "sector bad loans jumped from Rs 14 cr (FY19) to ~Rs 1,163 cr"}
+  - {key: invoice_discounting, name: "Invoice discounting platforms", group: Debt and deposits, income_yield: 0.11, income_tax: slab,
+     income_paid: true, credit_loss: 0.015, annual_cost_pct: 0.005, gains_tax: exempt, liquidity: "30-120 day tenors",
+     min_ticket: 50000, eligible: "yes", turbulence: "unregulated platform risk; buyer defaults rise in slowdowns"}
+  # ------------------------------------------------------------------ government schemes and retirement
+  - {key: ppf, name: "PPF", group: Small savings and retirement, income_yield: 0.071, income_tax: exempt, income_paid: false,
+     gains_tax: exempt, cap_inr_per_year: 150000, liquidity: "15-year lock-in, partial withdrawal from year 7", min_ticket: 500,
+     eligible: "yes, Rs 1.5 lakh/yr", turbulence: "sovereign and fully tax-free"}
+  - {key: vpf, name: "EPF / VPF (salaried)", group: Small savings and retirement, income_yield: 0.0825, income_tax: exempt, income_paid: false,
+     gains_tax: exempt, cap_inr_per_year: 250000, liquidity: "locked till job change/retirement", min_ticket: 0,
+     eligible: "if salaried; tax-free on contributions up to Rs 2.5 lakh/yr", turbulence: "the best risk-free after-tax rate here"}
+  - {key: nsc, name: "NSC (5 years)", group: Small savings and retirement, income_yield: 0.077, income_tax: slab, income_paid: false,
+     gains_tax: exempt, liquidity: "5-year lock-in", min_ticket: 1000, eligible: "yes", turbulence: "sovereign"}
+  - {key: scss_parents, name: "SCSS in a parent's name (60+)", group: Small savings and retirement, income_yield: 0.082, income_tax: slab,
+     slab_override: 0.05, income_paid: true, gains_tax: exempt, cap_inr_per_year: 3000000, liquidity: "5 years, premature exit with penalty",
+     min_ticket: 1000, eligible: "via parents: gifted money is taxed at their (usually lower) slab, no clubbing",
+     turbulence: "sovereign, quarterly payout"}
+  - {key: nps, name: "NPS Tier I (75% equity, active choice)", group: Small savings and retirement, growth: {base: 0.10, bear: 0.04, bull: 0.125},
+     annual_cost_pct: 0.001, gains_tax: exempt, exit_cost_pct: 0.06, liquidity: "locked till 60; 40% must buy an annuity", min_ticket: 1000,
+     eligible: "yes; employer contribution up to 14% of basic is deductible in the new regime",
+     turbulence: "auto-rebalancing; the exit cost models the forced annuity"}
+  - {key: endowment, name: "Traditional endowment / guaranteed insurance plan", group: Small savings and retirement, growth: 0.05,
+     gains_tax: exempt, liquidity: "heavy surrender penalties in early years", min_ticket: 25000, eligible: "yes, but avoid",
+     turbulence: "safe but ~5% IRR; buy term insurance and invest the difference"}
+  # ------------------------------------------------------------------ real estate (listed and physical)
+  - {key: reit, name: "Listed REITs (office/retail)", group: Real estate, growth: reit_price, income_yield: 0.065, income_tax: "mixed:0.4",
+     income_paid: true, gains_tax: equity, liquidity: "T+1, thinner than stocks", min_ticket: 400, eligible: "yes",
+     turbulence: "fell ~30% in 2020 with occupancy fears; rent contracts give some floor"}
+  - {key: invit, name: "Listed InvITs (roads, power lines)", group: Real estate, growth: {base: -0.005, bear: -0.03, bull: 0.01},
+     income_yield: 0.085, income_tax: "mixed:0.6", income_paid: true, gains_tax: equity, liquidity: "T+1, thin", min_ticket: 200,
+     eligible: "yes", turbulence: "bond-like cash flows; prices fall when rates rise"}
+  - {key: sm_reit, name: "Small & Medium REITs / fractional commercial", group: Real estate, growth: 0.02, income_yield: 0.085,
+     income_tax: "mixed:0.6", income_paid: true, annual_cost_pct: 0.01, entry_cost_pct: 0.01, exit_cost_pct: 0.03, gains_tax: equity,
+     liquidity: "weeks to months", min_ticket: 1000000, eligible: "needs Rs 10 lakh", turbulence: "concentrated in a few buildings"}
+  - {key: flat_india, name: "Residential flat in India (rented)", group: Real estate, growth: property_india, income_yield: 0.028,
+     income_tax: "mixed:0.7", income_paid: true, annual_cost_pct: 0.006, entry_cost_pct: 0.075, exit_cost_pct: 0.02,
+     gains_tax: unlisted_24m, liquidity: "3-9 months to sell", min_ticket: 6000000, eligible: "needs ~Rs 60 lakh+ or a home loan",
+     turbulence: "prices are sticky but transactions freeze; rent yields 2-3% are below FD rates"}
+  - {key: plot_india, name: "Residential plot (approved layout)", group: Real estate, growth: {base: 0.08, bear: 0.0, bull: 0.12},
+     annual_cost_pct: 0.002, entry_cost_pct: 0.075, exit_cost_pct: 0.02, gains_tax: unlisted_24m, liquidity: "3-12 months",
+     min_ticket: 2000000, eligible: "needs ~Rs 20 lakh+ in tier-2 towns", turbulence: "no income; title diligence is everything"}
+  # ------------------------------------------------------------------ commodities
+  - {key: sgb_secondary, name: "Sovereign Gold Bond (bought on exchange)", group: Commodities, growth: gold_inr, income_yield: 0.025,
+     income_basis: principal, income_tax: slab, income_paid: true, entry_cost_pct: -0.03, exit_cost_pct: 0.0, gains_tax: listed_12m,
+     liquidity: "thin on NSE; RBI redemption window after year 5", min_ticket: 15000,
+     eligible: "yes; since Apr 2026 secondary buyers pay LTCG at maturity", turbulence: "gold hedge plus 2.5% interest; buy only at a discount"}
+  - {key: silver_etf, name: "Silver ETF", group: Commodities, growth: silver_inr, annual_cost_pct: 0.004, gains_tax: listed_12m,
+     liquidity: "T+1", min_ticket: 100, eligible: "yes", turbulence: "more volatile than gold, part industrial metal"}
+  - {key: physical_silver, name: "Physical silver (bars/coins)", group: Commodities, growth: silver_inr, entry_cost_pct: 0.08,
+     exit_cost_pct: 0.05, annual_cost_inr: 3000, gains_tax: unlisted_24m, liquidity: "same day, at a haircut", min_ticket: 10000,
+     eligible: "yes", turbulence: "bulky; locker and purity risk"}
+  # ------------------------------------------------------------------ alternatives
+  - {key: crypto_btc, name: "Bitcoin via an Indian exchange", group: Alternatives, growth: crypto, entry_cost_pct: 0.006, exit_cost_pct: 0.006,
+     gains_tax: crypto, liquidity: "instant, 24x7", min_ticket: 100, eligible: "yes",
+     turbulence: "has fallen 70-80% in past bear markets; 30% tax with no loss set-off, 1% TDS on every sale"}
+  - {key: collectibles, name: "Art / watches / collectibles", group: Alternatives, growth: {base: 0.05, bear: -0.02, bull: 0.09},
+     entry_cost_pct: 0.15, exit_cost_pct: 0.15, annual_cost_pct: 0.005, gains_tax: unlisted_24m, liquidity: "auction cycles, months",
+     min_ticket: 100000, eligible: "yes, as a hobby", turbulence: "illiquid when you need cash; 25-30% round-trip costs"}
+  - {key: fno_selling, name: "F&O option selling", group: Alternatives, growth: {base: -0.05, bear: -0.30, bull: 0.08},
+     annual_cost_pct: 0.02, gains_tax: slab, liquidity: "intraday", min_ticket: 1500000, eligible: "not recommended",
+     turbulence: "SEBI: ~90% of individuals lose money; one Nifty lot is Rs 15-20 lakh of exposure"}

@@ -1,0 +1,97 @@
+# Real-asset candidates compared with listed equity on an after-tax, after-cost cash-flow basis.
+# Every number is an editable assumption. Sources for the defaults are in docs/REAL_ASSETS.md.
+# Rates are annual; amounts in the asset's own currency unless the key ends in _inr.
+
+common:
+  horizon_years: 10
+  slab_rate: 0.30                  # your marginal rate (rent, short-term gains on property/gold)
+  cess: 0.04
+  ltcg_rate: 0.125                 # land/property/gold/foreign assets, no indexation
+  discount_rate: 0.07              # cost of money locked up (TCS, deposits)
+  scenarios:                       # each overrides the growth assumptions below
+    base: {equity: 0.11, dubai_price: 0.03, inr_vs_aed: 0.025, farmland: 0.07, gold_inr: 0.08}
+    bear: {equity: 0.04, dubai_price: -0.03, inr_vs_aed: 0.04, farmland: 0.02, gold_inr: 0.10}
+    bull: {equity: 0.14, dubai_price: 0.06, inr_vs_aed: 0.015, farmland: 0.10, gold_inr: 0.05}
+
+equity_benchmark:                  # Nifty 50 ETF buy & hold, the yardstick everything is compared to
+  amount_inr: 1600000
+  cost_pct: 0.001                  # entry + exit friction
+  harvest_exemption_yearly: false  # true = book Rs 1.25L LTCG tax-free each year (EDGES.md A1); off so every asset is compared without it
+  exemption: 125000
+
+dubai_flat:
+  name: "1-bed apartment, Jumeirah Village Circle (ready, resale)"
+  price_aed: 950000
+  size_sqft: 750
+  gross_yield: 0.0725              # FAM Properties 2026, JVC 12-month resale apartment yield
+  service_charge_aed_sqft: 15      # assumption: varies by building (roughly 12-25)
+  vacancy_months: 1.0
+  management_pct_of_rent: 0.05     # plus 5% VAT
+  maintenance_aed: 3000
+  insurance_aed: 1000
+  purchase:                        # Bayut 2026 fee guide
+    dld_pct: 0.04
+    dld_admin_aed: 580
+    trustee_aed: 4200
+    title_deed_aed: 250
+    agent_pct: 0.02                # plus 5% VAT
+    conveyancing_aed: 7500
+    furnishing_aed: 25000
+  selling:
+    agent_pct: 0.02                # plus 5% VAT
+    noc_aed: 2000
+  aed_inr: 23.0                    # spot AED/INR at purchase (AED is pegged at 3.6725 per USD)
+  remittance_fx_pct: 0.005         # bank spread converting INR -> AED/USD
+  lrs_limit_usd_per_person: 250000
+  buyers: 1                        # family members remitting under their own LRS limits
+  rent_repatriated: true
+
+agricultural_land:
+  karnataka:
+    name: "1 acre dry farmland, rural Karnataka (e.g. Tumakuru/Mandya belt)"
+    acres: 1
+    price_per_acre_inr: 1500000
+    stamp_duty_pct: 0.056          # 5% + cess/surcharge
+    registration_pct: 0.01
+    legal_survey_inr: 50000        # 30-year title search, survey, mutation
+    fencing_borewell_inr: 250000
+    lease_income_per_acre_inr: 15000
+    annual_costs_inr: 12000        # caretaker visits, land revenue, upkeep
+    selling_cost_pct: 0.02
+    months_to_sell: 9
+    rural: true                    # beyond the municipal distance limits => not a capital asset, sale tax-free
+    can_buy: "yes - Sec 79A/79B repealed in 2020; ceiling limits still apply"
+  chhattisgarh:
+    name: "1 acre farmland, Chhattisgarh (non-scheduled district)"
+    acres: 1
+    price_per_acre_inr: 1000000
+    stamp_duty_pct: 0.05           # 4% if bought in a woman's name
+    registration_pct: 0.04         # women: 50% registration concession announced for FY26-27
+    legal_survey_inr: 50000
+    fencing_borewell_inr: 200000
+    lease_income_per_acre_inr: 12000
+    annual_costs_inr: 10000
+    selling_cost_pct: 0.02
+    months_to_sell: 12
+    rural: true
+    can_buy: "uncertain - reported to need Collector permission for non-agriculturists (s.165 CG Land Revenue Code); tribal land in Fifth Schedule areas needs Gram Sabha approval. Verify with a local revenue advocate."
+
+physical_gold:
+  amount_inr: 500000
+  city: bangalore                  # price used for purchase; see `python main.py gold-prices`
+  forms:
+    coin:      {making_pct: 0.04, buyback_haircut_pct: 0.03}
+    bar:       {making_pct: 0.01, buyback_haircut_pct: 0.015}
+    jewellery: {making_pct: 0.12, buyback_haircut_pct: 0.06}   # making charge is lost on resale
+  gst_gold_pct: 0.03
+  gst_making_pct: 0.05
+  locker_rent_inr: 5000            # HDFC small, metro, from 1 Apr 2026 (SBI small urban: 2000)
+  locker_gst_pct: 0.18
+  insurance_pct: 0.002             # banks don't insure locker contents
+  gold_etf: {expense_pct: 0.0055, spread_pct: 0.001}
+
+gold_prices:
+  cities: [bangalore, raipur, mumbai, chennai, hyderabad]   # site has no page for delhi/bilaspur (404); raipur proxies Chhattisgarh
+  source: "https://pricehistoryapp.com/gold/{city}"
+  history_file: data/gold_city_prices.csv
+  import_duty_pct: 0.06            # basic customs + AIDC on gold (2024 cut); check the current Budget

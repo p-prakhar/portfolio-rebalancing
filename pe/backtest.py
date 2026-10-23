@@ -1,0 +1,209 @@
+"""Walk-forward backtest that runs the exact live planner day by day, with lots, Indian tax and costs.
+
+Signals use data up to the close of the check day; orders fill at later closes per the
+execution mode. Tax for each FY is paid out of the portfolio on the last trading day of
+March. At the end we report NAV, tax accrued on gains realised in the current FY, and the
+value if everything were sold on the last day ("liquidation value").
+"""
+from __future__ import annotations
+
+import copy
+from dataclasses import dataclass, field
+from datetime import date
+
+import numpy as np
+import pandas as pd
+
+from .config import Lot, Settings
+from .costs import fx_cost, leg_cost
+from .engine import Trade, make_plan
+from .stopping import secretary_decision
+from .tax import BUCKETS, bucket_for, compute_tax, fy_start_year, is_long_term
+
+VARIANTS = [
+    # name, policy, execution, harvest
+    ("Buy & hold (your current portfolio)", "buy_hold", "immediate", False),
+    ("Buy & hold + tax harvesting", "buy_hold", "immediate", True),
+    ("Custom: keep holdings, exit on TA+momentum", "custom", "immediate", True),
+    ("Dual momentum (Nifty/Gold/Cash)", "dual_momentum", "immediate", True),
+    ("Cross-sectional momentum, top 3", "xs_momentum", "immediate", True),
+    ("Trend filter + vol targeting", "trend_vol", "immediate", True),
+    ("Risk parity (inverse vol)", "risk_parity", "immediate", True),
+    ("Defensive asset allocation (canary)", "daa", "immediate", True),
+    ("Core-satellite, immediate fills", "core_satellite", "immediate", True),
+    ("Core-satellite, secretary-rule fills", "core_satellite", "secretary", True),
+    ("Core-satellite, TWAP fills", "core_satellite", "twap", True),
+]
+
+
+@dataclass
+class Leg:
+    trade: Trade
+    mode: str
+    n: int
+    observed: list = field(default_factory=list)
+    done_frac: float = 0.0
+
+
+@dataclass
+class Book:
+    lots: list[Lot]
+    cash: float
+    fy_realised: dict
+    fy: int
+    taxes_paid: float = 0.0
+    costs_paid: float = 0.0
+    turnover: float = 0.0
+    log: list = field(default_factory=list)
+
+
+def _sell(book: Book, settings: Settings, t: Trade, frac: float, price: float, day: date, usd_inr):
+    convert = not t.kind.startswith("harvest")  # harvest sell+rebuy stays in USD at the broker
+    a = settings.assets[t.symbol]
+    value = 0.0
+    for lot, q in t.lots:
+        q = min(q * frac, lot.qty)
+        if q <= 0:
+            continue
+        lt = is_long_term(lot, a.tax_class, day, settings)
+        book.fy_realised[bucket_for(a.tax_class, lt)] += q * (price - lot.price)
+        lot.qty -= q
+        value += q * price
+    book.lots = [l for l in book.lots if l.qty > 1e-9]
+    c = leg_cost(settings, a, "sell", value, price, usd_inr) + (fx_cost(settings, value) if a.currency == "USD" and convert else 0)
+    book.cash += value - c
+    book.costs_paid += c
+    book.turnover += value
+    return value
+
+
+def _buy(book: Book, settings: Settings, symbol: str, value: float, price: float, day: date, usd_inr, convert=True):
+    value = min(value, max(book.cash, 0.0))
+    if value <= 1:
+        return 0.0
+    a = settings.assets[symbol]
+    c = leg_cost(settings, a, "buy", value, price, usd_inr) + (fx_cost(settings, value) if a.currency == "USD" and convert else 0)
+    book.lots.append(Lot(symbol, (value - c) / price, day, price))
+    book.cash -= value
+    book.costs_paid += c
+    book.turnover += value
+    return value
+
+
+def _nav(book: Book, px_row: pd.Series) -> float:
+    return sum(l.qty * float(px_row[l.symbol]) for l in book.lots) + book.cash
+
+
+def _check_days(idx: pd.DatetimeIndex, freq: str) -> set:
+    s = pd.Series(idx, index=idx)
+    key = s.dt.to_period("M") if freq == "monthly" else s.dt.to_period("W")
+    return set(s.groupby(key).first().values)
+
+
+def run_variant(name, policy, execution, harvest, init_lots, px, vix, settings: Settings, start, fx=None):
+    idx = px.index[px.index >= start]
+    tm = settings.timing
+    checks = _check_days(idx, tm["check_frequency"])
+    book = Book(copy.deepcopy(init_lots), 0.0, {b: 0.0 for b in BUCKETS}, fy_start_year(idx[0].date()))
+    pending: list[Leg] = []
+    navs = []
+    for i, ts in enumerate(idx):
+        day = ts.date()
+        row = px.loc[ts]
+        usd_inr = float(fx.loc[ts]) if fx is not None and ts in fx.index else None
+        # FY rollover: pay last FY's tax at the first trading day of the new FY
+        fy = fy_start_year(day)
+        if fy != book.fy:
+            res = compute_tax(book.fy_realised, settings)
+            book.cash -= res.tax
+            book.taxes_paid += res.tax
+            book.log.append((day, "TAX", f"Paid Rs {res.tax:,.0f} for FY{book.fy}-{(book.fy + 1) % 100:02d}"))
+            book.fy_realised = {b: 0.0 for b in BUCKETS}
+            book.fy_realised["eq_st"] -= res.carry_forward_st_loss
+            book.fy_realised["oth_lt"] -= res.carry_forward_lt_loss
+            book.fy = fy
+        # work pending legs (sells first so buys can be funded)
+        for leg in sorted(pending, key=lambda l: l.trade.side != "sell"):
+            t = leg.trade
+            p = float(row[t.symbol])
+            if leg.mode == "secretary":
+                leg.observed.append(p)
+                funded = t.side == "sell" or not any(l.trade.side == "sell" and l.done_frac < 1 for l in pending)
+                dec, _ = secretary_decision(leg.observed, leg.n, t.side)
+                if dec == "execute" and funded or len(leg.observed) >= leg.n + 5:
+                    frac = 1 - leg.done_frac
+                else:
+                    continue
+            elif leg.mode == "twap":
+                frac = min(1 / leg.n, 1 - leg.done_frac)
+            else:
+                frac = 1 - leg.done_frac
+            if t.side == "sell":
+                if leg.mode == "twap":
+                    _sell_twap(book, settings, t, leg, p, day, usd_inr)
+                else:
+                    _sell(book, settings, t, 1.0, p, day, usd_inr)
+            else:
+                _buy(book, settings, t.symbol, t.value * frac, p, day, usd_inr, not t.kind.startswith("harvest"))
+            leg.done_frac += frac
+            book.log.append((day, t.side.upper(), f"{t.symbol} {frac:.0%} of Rs {t.value:,.0f} @ {p:,.2f} [{t.kind}]"))
+        pending = [l for l in pending if l.done_frac < 1 - 1e-9]
+        # new decisions (only when nothing is still executing)
+        if ts in checks and not pending and i < len(idx) - 1:
+            hist = px.loc[:ts]
+            plan = make_plan(ts, book.lots, book.cash, hist, vix.loc[:ts] if vix is not None else None, settings,
+                             book.fy_realised, policy, harvest, usd_inr=usd_inr)
+            for t in plan.trades:
+                immediate = execution == "immediate" or t.kind.startswith("harvest") or \
+                    (t.kind == "risk_exit" and tm["regime_override_secretary"])
+                pending.append(Leg(t, "immediate" if immediate else execution, 1 if immediate else tm["window_days"]))
+                book.log.append((day, "PLAN", f"{t.side} {t.symbol} Rs {t.value:,.0f} [{t.kind}] - {t.why[0] if t.why else ''}"))
+            for b in plan.blocked:
+                book.log.append((day, "HOLD", b))
+            for d in plan.deferred:
+                book.log.append((day, "WAIT", d))
+        navs.append(_nav(book, row))
+    nav = pd.Series(navs, index=idx, name=name)
+    last = px.loc[idx[-1]]
+    accrued = compute_tax(book.fy_realised, settings).tax
+    unreal = {b: 0.0 for b in BUCKETS}
+    for l in book.lots:
+        a = settings.assets[l.symbol]
+        unreal[bucket_for(a.tax_class, is_long_term(l, a.tax_class, idx[-1].date(), settings))] += l.qty * (float(last[l.symbol]) - l.price)
+    liq_tax = compute_tax({b: book.fy_realised[b] + unreal[b] for b in BUCKETS}, settings).tax
+    return nav, book, accrued, liq_tax
+
+
+def _sell_twap(book, settings, t, leg, p, day, usd_inr):
+    t2 = copy.copy(t)
+    t2.lots = [(l, q * (1 / leg.n)) for l, q in t.lots]
+    return _sell(book, settings, t2, 1.0, p, day, usd_inr)
+
+
+def metrics(nav: pd.Series, book: Book, accrued: float, liq_tax: float, cash_rate: float) -> dict:
+    r = nav.pct_change().dropna()
+    years = (nav.index[-1] - nav.index[0]).days / 365.25
+    total = nav.iloc[-1] / nav.iloc[0] - 1
+    vol = r.std() * np.sqrt(252)
+    dd = (nav / nav.cummax() - 1).min()
+    sharpe = ((1 + total) ** (1 / years) - 1 - cash_rate) / vol if vol > 0 else np.nan
+    after_keep = nav.iloc[-1] - accrued
+    after_liq = nav.iloc[-1] - liq_tax
+    return {"start_value": nav.iloc[0], "end_value": nav.iloc[-1], "return": total,
+            "after_tax_return_keep": after_keep / nav.iloc[0] - 1,
+            "after_tax_return_liquidated": after_liq / nav.iloc[0] - 1,
+            "volatility": vol, "max_drawdown": dd, "sharpe": sharpe,
+            "taxes_paid": book.taxes_paid, "tax_accrued": accrued, "tax_if_liquidated": liq_tax,
+            "costs": book.costs_paid, "turnover_x": book.turnover / nav.iloc[0]}
+
+
+def run_all(init_lots, px, vix, settings: Settings, start, fx=None, variants=VARIANTS):
+    curves, rows, logs = [], [], {}
+    for name, policy, ex, hv in variants:
+        nav, book, accrued, liq = run_variant(name, policy, ex, hv, init_lots, px, vix, settings, start, fx)
+        curves.append(nav)
+        m = metrics(nav, book, accrued, liq, settings["cash"]["rate"])
+        m["strategy"] = name
+        rows.append(m)
+        logs[name] = book.log
+    return pd.concat(curves, axis=1), pd.DataFrame(rows).set_index("strategy"), logs
