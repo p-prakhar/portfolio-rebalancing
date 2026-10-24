@@ -195,7 +195,11 @@ def _regime_filter(plan: Plan, settings: Settings, px: pd.DataFrame) -> dict:
     p = float(s.iloc[-1])
     eng = plan.target.regime or {}
     cash_w = None if plan.target.weights is None else float(plan.target.weights.get("CASH", 0.0))
-    return {"benchmark": sym, "price": round(p, 2), "sma200": round(sma, 2), "gap": p / sma - 1, "state": "RISK_ON" if p > sma else "CASH_PRESERVATION",
+    tail = s.iloc[-260:]
+    sma_s = s.rolling(200).mean().iloc[-260:]
+    series = {"dates": [str(d.date()) for d in tail.index], "price": [round(float(v), 2) for v in tail],
+              "sma": [None if pd.isna(v) else round(float(v), 2) for v in sma_s]}
+    return {"benchmark": sym, "series": series, "price": round(p, 2), "sma200": round(sma, 2), "gap": p / sma - 1, "state": "RISK_ON" if p > sma else "CASH_PRESERVATION",
             "engine_label": (eng.get("label") or "").replace("_", "-"), "vix": eng.get("vix"), "target_cash_weight": cash_w}
 
 
@@ -323,6 +327,8 @@ def build(plan: Plan, settings: Settings, timing: list[str], px: pd.DataFrame, b
                                     "sma": settings.strategy["dual_momentum"]["sma"], "core_weight": settings.strategy.get("core_weight"), "check_frequency": settings.timing["check_frequency"],
                                     "ltcg_exemption": settings.tax["ltcg_exemption"]}
     data["execution_blotter"] = _blotter(plan, settings, px)
+    # the flow diagram uses the same twin-aware targets as the blotter, so both views agree
+    data["target"] = nodes({r["symbol"]: r["tgt_value"] for r in data["execution_blotter"] if r["tgt_value"] > 1})
     data["cross_sectional_universe"] = _momentum_matrix(plan, settings, px)
     if validation:
         from .validate import verdicts

@@ -1,388 +1,451 @@
-<!doctype html>
-<html lang="en">
-<head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Portfolio decision</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rebalance Check</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
+/* Layout: one calm column per tab; each tab answers one question and leads with one chart. */
 :root{
-  --bg:#f8fafc;--panel:#ffffff;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--hover:#f1f5f9;
-  --buy:#059669;--sell:#e11d48;--primary:#0f172a;--onprimary:#f8fafc;--warn:#b45309;--info:#475569;
-  --sans:"Geist",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-  --mono:"Geist Mono","JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --paper:#f6f7f4; --surface:#ffffff; --ink:#17201c; --muted:#5b6862; --faint:#8a958f; --line:#dde3df; --wash:#eef1ee;
+  --accent:#2a5bd7; --accent-wash:#e6edfb; --buy:#0d8a5d; --buy-wash:#e3f4ec; --sell:#cf3446; --sell-wash:#fbe8ea; --warn:#a86400; --warn-wash:#fbf0dc;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300; --s7:#e34948; --s8:#6b7a73;
+  --display:"Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --body:"IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
 }
-@media (prefers-color-scheme:dark){:root{--bg:#09090b;--panel:#09090b;--ink:#fafafa;--muted:#a1a1aa;--line:#27272a;--hover:#18181b;--buy:#10b981;--sell:#fb7185;--primary:#fafafa;--onprimary:#09090b;--warn:#f59e0b;--info:#a1a1aa}}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#111513; --surface:#171c19; --ink:#e7ece9; --muted:#a2aea8; --faint:#76827c; --line:#2b332f; --wash:#1d2421;
+  --accent:#7ea2ff; --accent-wash:#1d2742; --buy:#34c38f; --buy-wash:#13291f; --sell:#ff7a87; --sell-wash:#35181c; --warn:#e9a640; --warn-wash:#33260f;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#2f9e2f; --s7:#e66767; --s8:#8b9993; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --paper:#111513; --surface:#171c19; --ink:#e7ece9; --muted:#a2aea8; --faint:#76827c; --line:#2b332f; --wash:#1d2421;
+  --accent:#7ea2ff; --accent-wash:#1d2742; --buy:#34c38f; --buy-wash:#13291f; --sell:#ff7a87; --sell-wash:#35181c; --warn:#e9a640; --warn-wash:#33260f;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#2f9e2f; --s7:#e66767; --s8:#8b9993; color-scheme:dark }
 *{box-sizing:border-box}
-html{font-variant-numeric:tabular-nums}
-body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 var(--sans);font-variant-numeric:tabular-nums}
-a{color:var(--ink)}
-.n,td.n,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
-.top{border-bottom:1px solid var(--line);background:var(--bg)}
-.top .in{max-width:1320px;margin:0 auto;padding:8px 12px;display:flex;gap:16px;align-items:baseline;flex-wrap:wrap}
-.brand{font:600 13px var(--mono);letter-spacing:.06em}
-.asof{color:var(--muted);font:12px var(--mono)}
-nav{margin-left:auto;display:flex;gap:2px;flex-wrap:wrap}
-nav a{padding:6px 10px;color:var(--muted);text-decoration:none;font-size:13px;min-height:32px;display:inline-flex;align-items:center;border-radius:4px}
-nav a:hover,nav a:focus-visible{color:var(--ink);background:var(--hover)}
-main{max-width:1320px;margin:0 auto;padding:12px}
-.panel{border:1px solid var(--line);background:var(--panel);margin-bottom:12px;border-radius:4px}
-.ph{padding:8px 12px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
-.ph h2{margin:0;font:600 12px var(--mono);letter-spacing:.06em;text-transform:uppercase}
-.ph .hint{color:var(--muted);font-size:12px}
-.pb{padding:8px 12px}
-.divide>*+*{border-top:1px solid var(--line)}
-.cells{display:grid;grid-template-columns:2fr repeat(5,1fr)}
-.cell{padding:8px 12px;border-left:1px solid var(--line)}
-.cell:first-child{border-left:0}
-.cell small{display:block;color:var(--muted);font:11px var(--mono);letter-spacing:.04em;text-transform:uppercase}
-.cell b{font:500 18px var(--mono)}
-.cell .sub{color:var(--muted);font:12px var(--mono)}
-.buy{color:var(--buy)}.sell{color:var(--sell)}.hold{color:var(--muted)}.warn{color:var(--warn)}
-.tag{display:inline-block;font:600 11px var(--mono);padding:1px 6px;border:1px solid currentColor;border-radius:3px;letter-spacing:.04em}
-table{border-collapse:collapse;width:100%;font-size:13px}
-th,td{padding:6px 10px;text-align:right;white-space:nowrap;border-top:1px solid var(--line)}
-th{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.04em;color:var(--muted);border-top:0}
+[hidden]{display:none!important}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 var(--body);font-variant-numeric:tabular-nums;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px))}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top, 0px);z-index:10;background:var(--paper)}
+a{color:var(--accent)}
+.wrap{max-width:980px;margin:0 auto}
+header.top{position:sticky;top:env(safe-area-inset-top, 0px);z-index:5;background:var(--paper);border-bottom:1px solid var(--line);margin:0 calc(-1 * max(16px, env(safe-area-inset-left, 0px)));padding:0 max(16px, env(safe-area-inset-left, 0px))}
+.toprow{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding-top:14px}
+.brand{font:700 20px/1.2 var(--display);letter-spacing:-.01em}
+.asof{color:var(--muted);font-size:14px}
+.example{font-size:13px;color:var(--warn);background:var(--warn-wash);padding:2px 8px;border-radius:6px}
+[role=tablist]{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;margin-top:8px}
+[role=tab]{appearance:none;border:0;background:none;color:var(--muted);font:500 15px var(--body);padding:10px 14px 12px;min-height:44px;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
+[role=tab]:hover{color:var(--ink)}
+[role=tab][aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent)}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:4px}
+main{padding-block:32px 72px}
+section[role=tabpanel]{display:flex;flex-direction:column;gap:40px}
+h1{font:700 clamp(30px,5vw,46px)/1.08 var(--display);letter-spacing:-.02em;margin:0;text-wrap:balance;max-width:20ch}
+h2{font:700 24px/1.2 var(--display);letter-spacing:-.01em;margin:0 0 6px;text-wrap:balance}
+h3{font:600 16px/1.3 var(--body);margin:0 0 4px}
+p{margin:0}
+.lede{color:var(--muted);max-width:62ch}
+.block{display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;min-width:0}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px}
+.verdict{display:inline-flex;align-self:flex-start;align-items:center;gap:8px;font:600 14px var(--body);padding:6px 12px;border-radius:999px}
+.verdict.go{background:var(--accent-wash);color:var(--accent)}
+.verdict.stay{background:var(--buy-wash);color:var(--buy)}
+.reasons{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:12px;max-width:68ch}
+.reasons li{padding-left:18px;position:relative}
+.reasons li::before{content:"";position:absolute;left:0;top:.65em;width:7px;height:7px;border-radius:2px;background:var(--faint)}
+.muted{color:var(--muted)} .small{font-size:14px}
+.buy{color:var(--buy)} .sell{color:var(--sell)}
+.chip{display:inline-block;align-self:flex-start;font:600 12px var(--body);padding:2px 8px;border-radius:6px;letter-spacing:.02em}
+.chip.buy{background:var(--buy-wash)} .chip.sell{background:var(--sell-wash)} .chip.hold{background:var(--wash);color:var(--muted)} .chip.warn{background:var(--warn-wash);color:var(--warn)}
+.btn{appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:500 15px var(--body);min-height:44px;padding:0 16px;border-radius:10px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none}
+.btn:hover{border-color:var(--faint)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+select.btn{max-width:100%}
+.pick{display:flex;flex-wrap:wrap;gap:8px}
+.pick button{appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:500 14px var(--body);min-height:36px;padding:0 12px;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+.pick button[aria-pressed=true]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.key{width:10px;height:10px;border-radius:3px;display:inline-block;flex:none}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:20px}
+.stat small{display:block;color:var(--muted);font-size:13px}
+.stat b{font:600 20px/1.3 var(--body)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:10px 12px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:500;color:var(--muted);font-size:13px}
 th:first-child,td:first-child{text-align:left}
-td.l,th.l{text-align:left}
-td.wrap{white-space:normal;min-width:220px;text-align:left}
-tbody tr:hover{background:var(--hover)}
-tr.open>td{background:var(--hover)}
-.scroll{overflow-x:auto}
-button{font:inherit;color:inherit}
-.btn{min-height:32px;padding:0 12px;border:1px solid var(--line);background:var(--panel);cursor:pointer;border-radius:4px;font-size:13px}
-.btn.primary{background:var(--primary);color:var(--onprimary);border-color:var(--primary)}
-.btn:hover{background:var(--hover)}.btn.primary:hover{opacity:.9}
-.btn:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible,.chip:focus-visible,th button:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
-.chips{display:flex;flex-wrap:wrap;gap:4px;padding:8px 12px}
-.chip{border:1px solid var(--line);background:var(--panel);padding:3px 10px;font-size:12px;cursor:pointer;min-height:28px;border-radius:3px;display:inline-flex;gap:6px;align-items:center}
-.chip[aria-pressed=true]{background:var(--primary);color:var(--onprimary);border-color:var(--primary)}
-.sw{width:9px;height:9px;display:inline-block;border-radius:1px}
-.thbtn{background:none;border:0;padding:0;font:inherit;text-transform:inherit;letter-spacing:inherit;color:inherit;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
-.slider{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid var(--line)}
-input[type=range]{width:min(360px,60vw);accent-color:var(--primary)}
-.bar{height:6px;background:var(--line);border-radius:1px}
-.bar i{display:block;height:100%;background:var(--buy);width:0}
-ul.plain{margin:0;padding:0;list-style:none}
-ul.plain li{padding:6px 12px;border-top:1px solid var(--line)}
-ul.plain li:first-child{border-top:0}
-.muted{color:var(--muted)}
-.fx{padding:8px 12px;border-top:1px solid var(--line);font-size:13px}
-.fx .mono{font-size:12px;color:var(--muted)}
-details>summary{cursor:pointer;color:var(--muted);font-size:12px;padding:2px 0}
+.scroll{overflow-x:auto;min-width:0}
+details{border-top:1px solid var(--line);padding-top:12px}
+summary{cursor:pointer;color:var(--accent);font-weight:500;min-height:32px;display:flex;align-items:center}
+.trade{display:grid;grid-template-columns:auto 1fr auto;gap:4px 16px;align-items:baseline;padding:14px 0;border-bottom:1px solid var(--line)}
+.trade:last-child{border-bottom:0}
+.trade .amt{font-weight:600;text-align:right}
+.trade .sub{grid-column:2/4;color:var(--muted);font-size:14px}
+input[type=range]{width:100%;accent-color:var(--accent);min-height:32px}
+.slidehead{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.big{font:700 34px/1 var(--display)}
+.scale{display:flex;flex-direction:column;gap:14px}
+.scale .row{display:grid;grid-template-columns:150px 1fr 110px;gap:12px;align-items:center}
+.scale .bar{height:16px;border-radius:0 4px 4px 0;background:var(--line)}
+.scale .val{text-align:right;font-weight:600}
 .steps{list-style:none;margin:0;padding:0}
-.steps li{display:flex;gap:10px;padding:10px 12px;border-top:1px solid var(--line)}
-.steps li:first-child{border-top:0}
-.steps input{width:18px;height:18px;margin-top:2px;flex:none;accent-color:var(--primary)}
-.steps label{font-weight:500;cursor:pointer}
-.steps .d{color:var(--muted);font-size:13px;margin-top:2px;white-space:pre-line}
+.steps li{display:flex;gap:14px;padding:18px 0;border-bottom:1px solid var(--line)}
+.steps li:last-child{border-bottom:0}
+.steps input{width:22px;height:22px;margin-top:3px;flex:none;accent-color:var(--accent)}
+.steps label{font-weight:600;cursor:pointer}
+.steps .d{color:var(--muted);font-size:15px;margin-top:4px;white-space:pre-line;max-width:70ch}
+.steps code{font-size:14px;background:var(--wash);padding:2px 6px;border-radius:5px}
 .steps li.done label{text-decoration:line-through;color:var(--muted)}
-.tip{position:fixed;pointer-events:none;background:var(--primary);color:var(--onprimary);font:12px var(--mono);padding:4px 8px;border-radius:3px;z-index:20;max-width:300px;display:none}
-iframe.tv{width:100%;height:340px;border:1px solid var(--line);margin-top:8px}
-svg text{font-family:var(--mono)}
-footer{color:var(--muted);font-size:12px;padding:8px 0 40px}
-.katex{font-size:1.05em}
-@media (max-width:900px){.cells{grid-template-columns:repeat(2,1fr)}.cell{border-top:1px solid var(--line)}.cell:nth-child(odd){border-left:0}.cell:first-child{grid-column:1/-1}}
-@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+.progress{height:8px;border-radius:99px;background:var(--wash);overflow:hidden}
+.progress i{display:block;height:100%;width:0;background:var(--buy);transition:width .3s}
+.event{border-left:3px solid var(--line);padding-left:14px;min-height:96px}
+.tip{position:fixed;pointer-events:none;background:var(--ink);color:var(--paper);font-size:13px;line-height:1.4;padding:8px 10px;border-radius:8px;z-index:20;max-width:280px;display:none}
+.formula{padding:12px 0;border-bottom:1px solid var(--line);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:16px;align-items:center}
+.formula:last-child{border-bottom:0}
+.tex{font-size:18px;overflow-x:auto}
+footer{color:var(--muted);font-size:13px;max-width:70ch;padding-bottom:40px}
+svg text{font-family:var(--body)}
+@media (max-width:640px){ .scale .row{grid-template-columns:100px 1fr 84px} .formula{grid-template-columns:1fr} .panel{padding:16px} }
+@media (prefers-reduced-motion:reduce){ *{transition:none!important;scroll-behavior:auto!important} }
 </style>
-</head>
-<body>
-<header class="top"><div class="in"><span class="brand">PORTFOLIO ENGINE</span><span class="asof" id="asof"></span>
-<nav aria-label="Sections"><a href="#regime">Regime</a><a href="#blotter">Blotter</a><a href="#factors">Factors</a><a href="#money">Money</a><a href="#why">Inputs</a><a href="#backtest">Replay</a><a href="#evidence">10 years</a><a href="#universe">Universe</a><a href="#steps">Steps</a></nav></div></header>
-<main>
-<section id="regime" class="panel" aria-label="Regime and portfolio health"></section>
-<section id="decision" class="panel"></section>
-<section id="guards" class="panel" hidden></section>
-<section id="blotter" class="panel"></section>
-<section id="factors" class="panel"></section>
-<section id="money" class="panel"></section>
-<section id="why" class="panel"></section>
-<section id="backtest" class="panel"></section>
-<section id="evidence" class="panel"></section>
-<section id="universe" class="panel"></section>
-<section id="steps" class="panel"></section>
-<footer id="foot"></footer>
-</main>
+
+<header class="top"><div class="wrap">
+  <div class="toprow"><span class="brand">Rebalance check</span><span class="asof" id="asof"></span><span class="example" id="example" hidden>Example portfolio with made-up numbers</span></div>
+  <div role="tablist" aria-label="Views" id="tabs"></div>
+</div></header>
+<main class="wrap" id="main"></main>
 <div class="tip" id="tip" role="tooltip"></div>
 <script id="data" type="application/json">__DATA__</script>
 <script>
-/* ---------- data, with engine prose cleaned (no em-dashes in UI copy) ---------- */
+"use strict";
 const clean = o => typeof o === 'string' ? o.replace(/\s*—\s*/g, ', ') : Array.isArray(o) ? o.map(clean) : (o && typeof o === 'object') ? Object.fromEntries(Object.entries(o).map(([k,v]) => [k, clean(v)])) : o;
 const D = clean(JSON.parse(document.getElementById('data').textContent));
 const $ = (s, r=document) => r.querySelector(s);
-const el = (t, a={}, ...k) => { const e = document.createElement(t); for (const [x,v] of Object.entries(a)) { if (x==='class') e.className=v; else if (x==='html') e.innerHTML=v; else if (x.startsWith('on')) e.addEventListener(x.slice(2), v); else e.setAttribute(x,v); } k.flat().forEach(c => e.append(c)); return e; };
+function el(t, a, ...kids){ const e=document.createElement(t); for (const [k,v] of Object.entries(a||{})) { if (v==null||v===false) continue; if (k==='class') e.className=v; else if (k==='style') e.style.cssText=v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v===true?'':v); } kids.flat().forEach(c => { if (c!=null && c!==false) e.append(c); }); return e; }
 const NS='http://www.w3.org/2000/svg';
-const sv = (t, a={}, ...k) => { const e = document.createElementNS(NS, t); for (const [x,v] of Object.entries(a)) e.setAttribute(x, v); k.flat().forEach(c => e.append(c)); return e; };
+function sv(t, a, ...kids){ const e=document.createElementNS(NS,t); for (const [k,v] of Object.entries(a||{})) if (v!=null) e.setAttribute(k,v); kids.flat().forEach(c=>{ if (c!=null) e.append(c); }); return e; }
 const rs = x => 'Rs ' + Math.round(x).toLocaleString('en-IN');
-const num = (x, d=0) => (x==null||isNaN(x)) ? '-' : x.toLocaleString('en-IN', {minimumFractionDigits:d, maximumFractionDigits:d});
-const pc = (x, d=1) => (x==null||isNaN(x)) ? '-' : (x*100).toFixed(d) + '%';
-const spc = (x, d=1) => (x==null||isNaN(x)) ? '-' : (x>=0?'+':'') + (x*100).toFixed(d) + '%';
-const cls = x => x>0?'buy':x<0?'sell':'hold';
-const panel = (id, title, hint) => { const p = $('#'+id); p.append(el('div',{class:'ph'}, el('h2',{},title), hint?el('span',{class:'hint'},hint):'')); return p; };
-const SLEEVE = {india_equity:'#2563eb', global_equity:'#d97706', gold:'#ca8a04', metals:'#78716c', semis:'#0f766e', commodity:'#a16207', bonds:'#4d7c0f', cash:'#059669', other:'#64748b'};
-const SLEEVE_NAME = {india_equity:'India equity', global_equity:'Global equity', gold:'Gold', metals:'Metals', semis:'Semiconductors', commodity:'Commodity', bonds:'Bonds', cash:'Cash', other:'Other'};
-const PAL = ['#64748b','#2563eb','#d97706','#059669','#e11d48','#a16207','#0f766e','#c2410c','#4d7c0f','#be123c','#1d4ed8','#b45309','#475569','#15803d','#9f1239'];
+const lakh = x => Math.abs(x) >= 1e7 ? 'Rs ' + (x/1e7).toFixed(2) + ' cr' : Math.abs(x) >= 1e5 ? 'Rs ' + (x/1e5).toFixed(2) + ' L' : rs(x);
+const pc = (x,d=1) => x==null||isNaN(x) ? 'n/a' : (x*100).toFixed(d)+'%';
+const spc = (x,d=1) => x==null||isNaN(x) ? 'n/a' : (x>=0?'+':'')+(x*100).toFixed(d)+'%';
+const num = (x,d=0) => x==null||isNaN(x) ? 'n/a' : x.toLocaleString('en-IN',{minimumFractionDigits:d,maximumFractionDigits:d});
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const SERIES = ['--s1','--s2','--s3','--s4','--s5','--s6','--s7','--s8'];
 const tip = $('#tip');
-function showTip(e, html){ tip.innerHTML=html; tip.style.display='block'; const w=tip.offsetWidth; tip.style.left=Math.min(innerWidth-w-8,e.clientX+12)+'px'; tip.style.top=(e.clientY+14)+'px'; }
+function showTip(ev, html){ tip.innerHTML=html; tip.style.display='block'; const w=tip.offsetWidth, h=tip.offsetHeight; let x=ev.clientX+14, y=ev.clientY+14; if (x+w>innerWidth-8) x=ev.clientX-w-14; if (y+h>innerHeight-8) y=ev.clientY-h-14; tip.style.left=Math.max(8,x)+'px'; tip.style.top=Math.max(8,y)+'px'; }
 function hideTip(){ tip.style.display='none'; }
-$('#asof').textContent = D.asof + '  ' + D.data_note;
+function store(k, v){ try { if (v===undefined) return JSON.parse(localStorage.getItem(k)||'null'); localStorage.setItem(k, JSON.stringify(v)); } catch(e) { return null; } return null; }
 
-/* ---------- KaTeX (optional, from a CDN; falls back to monospace text) ---------- */
-const FORMULAS = {
-  R:  {tex:'R = \\frac{P_{t-1}}{P_{t-12}} - 1', plain:'R = P(t-1) / P(t-12) - 1', note:'12-1 month return: price one month ago over price twelve months ago. In days: skip = 21, lookback = 252.'},
-  sigma:{tex:'\\sigma = \\sqrt{\\frac{252}{N-1}\\sum_{i}(r_i-\\bar r)^2}', plain:'sigma = sqrt(252 / (N-1) * sum (r - mean r)^2)', note:'Annualised volatility of daily returns over the same window.'},
-  M:  {tex:'M = \\frac{R}{\\sigma}', plain:'M = R / sigma', note:'Momentum per unit of risk.'},
-  z:  {tex:'z = \\frac{M-\\mu_M}{\\sigma_M}', plain:'z = (M - mean M) / stdev M', note:'M standardised across the whole universe, so scores are comparable.'},
-  regime:{tex:'\\text{regime} = \\mathbf{1}\\left[P_t > \\mathrm{SMA}_{200}\\right]', plain:'regime = 1 if P > SMA200 else 0', note:'1 = RISK_ON, 0 = CASH_PRESERVATION.'},
-  rule:{tex:'\\Delta w = w^{*} - w,\\qquad \\text{trade iff } |\\Delta w| \\ge \\theta', plain:'dw = w* - w;  trade if |dw| >= theta', note:'Drift rule used by the slider. Below theta the position is held.'}
+$('#asof').textContent = 'Prices to ' + D.asof;
+if (D.example) $('#example').hidden = false;
+
+/* ---------- formulas (KaTeX when online, readable text otherwise) ---------- */
+const F = {
+  R:{tex:'R = \\frac{P_{t-1}}{P_{t-12}} - 1', plain:'R = P(t-1) / P(t-12) - 1', say:'Return from twelve months ago to one month ago. Skipping the latest month avoids short-term reversals.'},
+  sigma:{tex:'\\sigma = \\sqrt{\\tfrac{252}{N-1}\\sum (r_i-\\bar r)^2}', plain:'sigma = sqrt(252/(N-1) x sum of (r - mean r)^2)', say:'Yearly volatility of daily returns over the same window.'},
+  M:{tex:'M = R / \\sigma', plain:'M = R / sigma', say:'Momentum per unit of risk. A calm, steady riser beats a wild one with the same return.'},
+  z:{tex:'z = (M-\\mu_M)/\\sigma_M', plain:'z = (M - average M) / spread of M', say:'How far an asset sits above or below the rest of the list.'},
+  regime:{tex:'\\text{risk on} \\iff P_t > \\mathrm{SMA}_{200}', plain:'risk on if price > 200-day average', say:'The trend test on the Nifty 50. Below its 200-day average, the engine leans toward shelter.'},
+  rule:{tex:'\\Delta w = w^{*}-w,\\;\\text{trade if } |\\Delta w|\\ge\\theta', plain:'change = target weight - current weight; trade if |change| >= theta', say:'Small drifts are left alone because trading them costs more than it fixes.'}
 };
-let katexReady = false;
-function renderTex(node){ const f = FORMULAS[node.dataset.f]; if (katexReady) { try { window.katex.render(f.tex, node, {throwOnError:false, displayMode:false}); return; } catch(e){} } node.className='mono'; node.textContent = f.plain; }
-function texAll(){ document.querySelectorAll('[data-f]').forEach(renderTex); }
-(function(){ const l = el('link',{rel:'stylesheet',href:'https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css'}); const s = el('script',{src:'https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js'}); s.onload = () => { katexReady = true; texAll(); }; document.head.append(l, s); })();
-const fnode = k => el('span',{'data-f':k});
+let katexOk = false;
+function tex(node){ const f=F[node.dataset.f]; if (katexOk) { try { window.katex.render(f.tex, node, {throwOnError:false}); return; } catch(e){} } node.textContent = f.plain; }
+function texAll(){ document.querySelectorAll('[data-f]').forEach(tex); }
+(function(){ const s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js'; s.onload=()=>{ katexOk=true; const st=document.createElement('style'); st.textContent='.katex{font:normal 1.1em KaTeX_Main,"Times New Roman",serif;line-height:1.2;white-space:nowrap}.katex .katex-mathml{position:absolute;clip:rect(1px,1px,1px,1px);padding:0;border:0;height:1px;width:1px;overflow:hidden}'; document.head.append(st); texAll(); }; document.head.append(s); })();
 
-/* ---------- blotter math (shared by regime bar, blotter, curve) ---------- */
-const P = D.rebalance_parameters; let theta = P.theta_default;
-function calcBlotter(th){
-  const nav = D.nav; const rows = D.execution_blotter.map(r => {
-    const cw = r.cur_value/nav, tw = r.tgt_value/nav, drift = tw - cw;
-    const trade = Math.abs(drift) >= th - 1e-12 && Math.abs(drift) > 1e-9;
-    const side = trade ? (drift>0?'BUY':'SELL') : 'HOLD';
-    let dv = trade ? drift*nav : 0, dsh = 0;
-    if (trade) { if (side==='SELL' && r.tgt_value<=1) { dsh = -r.cur_shares; dv = -r.cur_value; } else { dsh = (dv>0?1:-1)*Math.floor(Math.abs(dv)/r.price); dv = dsh*r.price; } }
-    const cost = trade && dsh!==0 ? r.cost_fixed + r.cost_pct*Math.abs(dv) : 0;
-    const tax = side==='SELL' ? Math.abs(dv)*r.tax_rate_on_sale : 0;
-    return {...r, cw, tw, drift, side, dv, dsh, cost, tax, newSh: r.cur_shares + dsh};
-  });
-  const vol = rows.reduce((a,r)=>a+Math.abs(r.dv),0);
-  return {rows, vol, turnover: vol/2/nav, cost: rows.reduce((a,r)=>a+r.cost,0), tax: rows.reduce((a,r)=>a+r.tax,0), n: rows.filter(r=>r.side!=='HOLD').length};
-}
-
-/* ---------- 1. regime / health bar ---------- */
-const regimeCells = {};
-(function(){
-  const p = $('#regime'), R = D.regime_filter;
-  const on = R.state==='RISK_ON';
-  const grid = el('div',{class:'cells'});
-  const mk = (k, label) => { const c = el('div',{class:'cell'}, el('small',{},label)); regimeCells[k] = c; grid.append(c); return c; };
-  mk('regime','Regime'); mk('nav','Total value'); mk('vol','Pending trade volume'); mk('turn','Est. turnover'); mk('cost','Est. cost + tax'); mk('cash','Cash shelter');
-  p.append(grid);
-  regimeCells.regime.append(el('b',{class:on?'buy':'sell'}, R.state), el('div',{class:'sub'}, `${R.benchmark} ${num(R.price,2)} vs SMA200 ${num(R.sma200,2)} (${spc(R.gap)})`), el('div',{class:'sub'}, `Engine view: ${R.engine_label||'n/a'}${R.vix?`, India VIX ${R.vix.toFixed(1)}`:''}`));
-  regimeCells.nav.append(el('b',{}, rs(D.nav)), el('div',{class:'sub'}, `${D.holdings.length} lot(s)${D.usd_inr?`, USD/INR ${D.usd_inr.toFixed(2)}`:''}`));
-  const cw = R.target_cash_weight;
-  regimeCells.cash.append(el('b',{}, cw==null?'n/a':pc(cw)), el('div',{class:'sub'}, cw==null?'policy keeps current mix':rs(cw*D.nav)+' in cash target'), el('div',{class:'sub'}, on?'regime allows risk':'trend says shelter in cash'));
-})();
-function updateRegimeBar(){
-  const c = calcBlotter(theta);
-  const set = (k, main, sub) => { const cell = regimeCells[k]; cell.querySelectorAll('b,.sub').forEach(x=>x.remove()); cell.append(el('b',{},main), el('div',{class:'sub'},sub)); };
-  set('vol', rs(c.vol), `${c.n} order(s) at theta ${pc(theta)}`); set('turn', pc(c.turnover,1), 'one-way, share of portfolio'); set('cost', rs(c.cost + c.tax), `fees ${rs(c.cost)}, tax est. ${rs(c.tax)}`);
-}
-
-/* ---------- 2. decision (one answer first) ---------- */
-(function(){
-  const v = D.verdict, p = panel('decision','Decision');
-  p.append(el('div',{class:'pb'}, el('span',{class:'tag '+(v.call==='REBALANCE'?'buy':'hold')}, v.call==='HOLD'?'DO NOT REBALANCE':'REBALANCE'), ' ', el('b',{}, v.headline)));
-  p.append(el('ul',{class:'plain'}, v.reasons.map(r=>el('li',{},r))), el('div',{class:'fx muted'}, `Strategy: ${D.policy}. Decision support only, not investment or tax advice. You make the final call.`));
-})();
-
-/* ---------- guardrails ---------- */
-(function(){
-  if(!D.guardrails.length) return; const p=$('#guards'); p.hidden=false; panel('guards','Your limits','checked across everything you own');
-  p.append(el('ul',{class:'plain'}, D.guardrails.map(g=>el('li',{}, el('span',{class:'tag '+(g.level==='warn'?'warn':'hold')}, g.level==='warn'?'CHECK':g.level==='ok'?'OK':'TIP'), ' ', el('b',{},g.title), ' ', el('span',{class:'muted'},g.detail)))));
-})();
-
-/* ---------- 3. order blotter with theta slider ---------- */
-function miniChart(host, xs, ys, mark, fmt, label){
-  const W=Math.max(host.clientWidth,260), H=120, m={l:46,r:8,t:8,b:20}; host.innerHTML='';
-  const lo=0, hi=Math.max(...ys)*1.1||1; const X=i=>m.l+(W-m.l-m.r)*(xs[i]-xs[0])/(xs[xs.length-1]-xs[0]), Y=v=>m.t+(H-m.t-m.b)*(1-(v-lo)/(hi-lo));
-  const svg=sv('svg',{viewBox:`0 0 ${W} ${H}`,width:'100%',height:H,role:'img','aria-label':label});
-  [0,.5,1].forEach(k=>{ const v=lo+(hi-lo)*k, y=Y(v); svg.append(sv('line',{x1:m.l,x2:W-m.r,y1:y,y2:y,stroke:'var(--line)'})); const t=sv('text',{x:m.l-4,y:y+3,'text-anchor':'end','font-size':10,fill:'var(--muted)'}); t.textContent=fmt(v); svg.append(t); });
-  [0.005,0.015,0.03,0.05].forEach(v=>{ const x=m.l+(W-m.l-m.r)*(v-xs[0])/(xs[xs.length-1]-xs[0]); const t=sv('text',{x,y:H-6,'text-anchor':'middle','font-size':10,fill:'var(--muted)'}); t.textContent=(v*100).toFixed(1)+'%'; svg.append(t); });
-  svg.append(sv('path',{d:ys.map((y,i)=>(i?'L':'M')+X(i).toFixed(1)+','+Y(y).toFixed(1)).join(''),fill:'none',stroke:'var(--ink)','stroke-width':1.5}));
-  const mx = m.l+(W-m.l-m.r)*(mark.x-xs[0])/(xs[xs.length-1]-xs[0]);
-  svg.append(sv('line',{x1:mx,x2:mx,y1:m.t,y2:H-m.b,stroke:'var(--sell)','stroke-dasharray':'3 3'}), sv('rect',{x:mx-3,y:Y(mark.y)-3,width:6,height:6,fill:'var(--sell)'}));
+/* ---------- charts ---------- */
+function lineChart(host, o){
+  host.innerHTML=''; const W=Math.max(host.clientWidth||600, 300), H=o.height||300, m={l:56,r:16,t:16,b:30};
+  const n=o.dates.length, X=i=>m.l+(W-m.l-m.r)*i/Math.max(n-1,1);
+  let lo=Infinity, hi=-Infinity; o.series.forEach(s=>s.vals.forEach(v=>{ if(v!=null){ lo=Math.min(lo,v); hi=Math.max(hi,v); } }));
+  const pad=(hi-lo)*.08||1; lo-=pad; hi+=pad; const Y=v=>m.t+(H-m.t-m.b)*(1-(v-lo)/(hi-lo));
+  const svg=sv('svg',{viewBox:`0 0 ${W} ${H}`,width:'100%',height:H,role:'img','aria-label':o.label});
+  for (let k=0;k<=4;k++){ const v=lo+(hi-lo)*k/4, y=Y(v); svg.append(sv('line',{x1:m.l,x2:W-m.r,y1:y,y2:y,stroke:css('--line')})); svg.append(sv('text',{x:m.l-8,y:y+4,'text-anchor':'end','font-size':12,fill:css('--muted')}, o.fmt(v))); }
+  const months=new Set(); const every=o.every||(n>600?12:n>200?2:1); let lastX=-99;
+  for (let i=0;i<n;i++){ const d=o.dates[i], k=d.slice(0,7); if (months.has(k)) continue; months.add(k); const mi=+d.slice(5,7)-1;
+    if ((every>=12 ? mi===0 : mi%every===0) && i>2 && i<n-3 && X(i)-lastX>48){ lastX=X(i); svg.append(sv('text',{x:X(i),y:H-8,'text-anchor':'middle','font-size':12,fill:css('--muted')}, every>=12 ? d.slice(0,4) : new Date(d+'T00:00:00').toLocaleString('en-IN',{month:'short'})+(mi===0?' '+d.slice(2,4):''))); } }
+  o.series.forEach(s=>{ let d=''; s.vals.forEach((v,i)=>{ if(v==null) return; d+=(i>0&&s.vals[i-1]!=null&&d?'L':'M')+X(i).toFixed(1)+','+Y(v).toFixed(1); }); svg.append(sv('path',{d,fill:'none',stroke:s.color,'stroke-width':s.w||2,'stroke-dasharray':s.dash||null,'stroke-linejoin':'round','stroke-linecap':'round'})); });
+  const cross=sv('line',{y1:m.t,y2:H-m.b,stroke:css('--faint'),'stroke-dasharray':'3 3',opacity:0}); svg.append(cross);
+  const hit=sv('rect',{x:m.l,y:m.t,width:W-m.l-m.r,height:H-m.t-m.b,fill:'transparent'}); svg.append(hit);
+  hit.addEventListener('pointermove',e=>{ const r=svg.getBoundingClientRect(); const px=(e.clientX-r.left)*W/r.width; const i=Math.max(0,Math.min(n-1,Math.round((px-m.l)/(W-m.l-m.r)*(n-1)))); cross.setAttribute('x1',X(i)); cross.setAttribute('x2',X(i)); cross.setAttribute('opacity',1);
+    showTip(e, `<b>${o.dates[i]}</b><br>` + o.series.filter(s=>s.vals[i]!=null).map(s=>`${s.name}: ${o.fmt(s.vals[i])}`).join('<br>')); });
+  hit.addEventListener('pointerleave',()=>{ cross.setAttribute('opacity',0); hideTip(); });
+  (o.markers||[]).forEach(mk=>{ const g=sv('g',{tabindex:0,role:'button','aria-label':mk.label.replace(/<[^>]+>/g,' '),style:'cursor:pointer'}); g.append(sv('circle',{cx:X(mk.i),cy:Y(mk.y),r:12,fill:'transparent'}), sv('circle',{cx:X(mk.i),cy:Y(mk.y),r:mk.r||5.5,fill:mk.color,stroke:css('--surface'),'stroke-width':2}));
+    g.addEventListener('pointermove',e=>{ e.stopPropagation(); showTip(e, mk.label); }); g.addEventListener('pointerleave',hideTip); g.addEventListener('click',()=>mk.click()); g.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); mk.click(); } }); svg.append(g); });
+  if (o.endLabels) o.series.forEach(s=>{ let i=n-1; while(i>0 && s.vals[i]==null) i--; svg.append(sv('text',{x:X(i)-4,y:Y(s.vals[i])-9,'text-anchor':'end','font-size':12,'font-weight':600,fill:css('--ink')}, s.short||s.name)); });
   host.append(svg);
 }
-(function(){
-  const p = panel('blotter','Order blotter','drift rule: trade only if |target weight - current weight| is at least theta');
-  const sl = el('div',{class:'slider'});
-  const inp = el('input',{type:'range',min:P.theta_min*1000,max:P.theta_max*1000,step:'1',value:Math.round(theta*1000),'aria-label':'Rebalance threshold theta'});
-  const out = el('span',{class:'mono'}); sl.append(el('label',{for:'th'},'Threshold '), fnode('rule'), inp, out, el('button',{class:'btn',type:'button',onclick:()=>{ inp.value=Math.round(P.theta_default*1000); inp.dispatchEvent(new Event('input')); }},'Reset to '+pc(P.theta_default)));
-  inp.id='th'; p.append(sl);
-  const body = el('div',{class:'scroll'}); p.append(body);
-  const sum = el('div',{class:'fx'}); p.append(sum);
-  const charts = el('div',{style:'display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));border-top:1px solid var(--line)'}, el('div',{class:'fx',style:'border:0'}, el('div',{class:'muted'},'Turnover vs theta'), el('div',{id:'ch1'})), el('div',{class:'fx',style:'border:0;border-left:1px solid var(--line)'}, el('div',{class:'muted'},'Fees + estimated tax vs theta (Rs)'), el('div',{id:'ch2'})));
-  p.append(charts);
-  p.append(el('div',{class:'fx muted'}, 'The slider shows what a plain drift rule would do. The tax-aware engine column is the plan the checklist follows: it also weighs tax, signal strength and costs. Tax is estimated as gain share times rate and ignores the Rs 1.25 lakh yearly exemption and loss set-off, so the engine\'s figure can be lower.'));
+function legend(items){ return el('div',{class:'pick',style:'gap:16px'}, items.map(i=>el('span',{class:'small muted',style:'display:inline-flex;gap:6px;align-items:center'}, el('span',{class:'key',style:`background:${i.color};${i.dash?'height:3px;width:16px;border-radius:0;':''}`}), i.name))); }
+
+/* ---------- shared blotter math ---------- */
+const P = D.rebalance_parameters;
+let theta = store('theta') || P.theta_default;
+function blotter(th){
+  const nav=D.nav; const rows=D.execution_blotter.map(r=>{ const cw=r.cur_value/nav, tw=r.tgt_value/nav, drift=tw-cw; const trade=Math.abs(drift)>=th-1e-12 && Math.abs(drift)>1e-9; const side=trade?(drift>0?'BUY':'SELL'):'HOLD';
+    let dv=0, dsh=0; if (trade){ if (side==='SELL' && r.tgt_value<=1){ dsh=-r.cur_shares; dv=-r.cur_value; } else { dsh=(drift>0?1:-1)*Math.floor(Math.abs(drift*nav)/r.price); dv=dsh*r.price; } }
+    const cost=trade&&dsh!==0 ? r.cost_fixed + r.cost_pct*Math.abs(dv) : 0; const tax= side==='SELL' ? Math.abs(dv)*r.tax_rate_on_sale : 0;
+    return Object.assign({}, r, {cw, tw, drift, side, dv, dsh, cost, tax}); });
+  const vol=rows.reduce((a,r)=>a+Math.abs(r.dv),0);
+  return {rows, vol, turnover:vol/2/nav, cost:rows.reduce((a,r)=>a+r.cost,0), tax:rows.reduce((a,r)=>a+r.tax,0), n:rows.filter(r=>r.side!=='HOLD').length};
+}
+
+/* ---------- tabs ---------- */
+const redraw = {};
+const TABS = [
+  {id:'decision', name:'Should I rebalance?', build:buildDecision},
+  {id:'plan', name:'The plan', build:buildPlan},
+  {id:'steps', name:'Steps', build:buildSteps},
+  {id:'record', name:'Track record', build:buildReplay},
+  {id:'markets', name:'Explore markets', build:buildExplore},
+  {id:'method', name:'How it decides', build:buildMethod},
+];
+const built = {};
+const tablist = $('#tabs'), main = $('#main');
+TABS.forEach((t,i)=>{
+  const b=el('button',{role:'tab',type:'button',id:'tab-'+t.id,'aria-controls':'panel-'+t.id,'aria-selected':'false',tabindex:'-1',onclick:()=>show(t.id,true)}, t.name);
+  b.addEventListener('keydown',e=>{ const k=e.key; if(k!=='ArrowRight'&&k!=='ArrowLeft') return; e.preventDefault(); const j=(i+(k==='ArrowRight'?1:-1)+TABS.length)%TABS.length; show(TABS[j].id,true); $('#tab-'+TABS[j].id).focus(); });
+  tablist.append(b);
+  main.append(el('section',{role:'tabpanel',id:'panel-'+t.id,'aria-labelledby':'tab-'+t.id,hidden:true}));
+});
+function show(id, push){
+  if (!TABS.find(t=>t.id===id)) id='decision';
+  TABS.forEach(t=>{ const sel=t.id===id; const b=$('#tab-'+t.id); b.setAttribute('aria-selected',String(sel)); b.tabIndex=sel?0:-1; $('#panel-'+t.id).hidden=!sel; });
+  if (!built[id]) { built[id]=true; TABS.find(t=>t.id===id).build($('#panel-'+id)); texAll(); }
+  if (push) { try { history.replaceState(null,'','#'+id); } catch(e){} store('tab', id); window.scrollTo({top:0}); }
+  if (redraw[id]) redraw[id]();
+}
+addEventListener('resize',()=>{ const cur=TABS.find(t=>!$('#panel-'+t.id).hidden); if (cur && redraw[cur.id]) redraw[cur.id](); });
+
+/* ---------- tab: decision ---------- */
+function buildDecision(p){
+  const v=D.verdict, go=v.call==='REBALANCE';
+  p.append(el('div',{class:'block'},
+    el('span',{class:'verdict '+(go?'go':'stay')}, go?'Rebalance':'Hold for now'),
+    el('h1',{}, v.headline),
+    el('p',{class:'lede'}, `Portfolio worth ${rs(D.nav)}. ${v.n_trades ? `The plan has ${v.n_trades} trades.` : 'No trades are needed.'} You make the final call.`)));
+
+  const edge = v.delta==null ? null : v.delta*D.nav, fric = v.cost + v.tax;
+  const maxv = Math.max(Math.abs(edge||0), fric, 1);
+  const bar = (label, val, color, note) => el('div',{class:'row'}, el('div',{}, el('div',{style:'font-weight:500'},label), el('div',{class:'small muted'},note)), el('div',{}, el('div',{class:'bar',style:`width:${Math.max(1.5,Math.abs(val)/maxv*100)}%;background:${color}`})), el('div',{class:'val'}, rs(val)));
+  p.append(el('div',{class:'panel block'}, el('h2',{},'What it costs against what it may gain'),
+    el('p',{class:'small muted'},'Gain is the strategy\'s edge over doing nothing in the last 12 months, applied to your portfolio. It is a guide, not a promise.'),
+    el('div',{class:'scale'}, bar('Fees and tax', fric, css('--sell'), `${pc(v.friction_pct,2)} of the portfolio`), edge!=null ? bar('Recent edge', edge, edge>=0?css('--buy'):css('--sell'), `${spc(v.delta)} in 12 months`) : null)));
+
+  p.append(el('div',{class:'block'}, el('h2',{},'Why'), el('ul',{class:'reasons'}, v.reasons.map(r=>el('li',{},r)))));
+
+  const R=D.regime_filter, on=R.state==='RISK_ON';
+  const host=el('div');
+  p.append(el('div',{class:'panel block'}, el('h2',{}, on?'The market trend is up':'The market is below its long-term trend'),
+    el('p',{class:'small muted'}, `${R.benchmark} is at ${num(R.price,2)}, ${spc(R.gap)} from its 200-day average of ${num(R.sma200,2)}. ${on?'The engine is free to take risk.':'The engine leans toward safety until this recovers.'}${R.vix?` India VIX is ${R.vix.toFixed(1)}.`:''}`),
+    host, legend([{name:R.benchmark+' price',color:css('--s1')},{name:'200-day average',color:css('--faint'),dash:true}])));
+  redraw.decision = () => lineChart(host,{dates:R.series.dates,series:[{name:R.benchmark,color:css('--s1'),vals:R.series.price,w:2},{name:'200-day average',color:css('--faint'),vals:R.series.sma,dash:'5 4',w:1.5}],fmt:x=>num(x,0),label:'Nifty 50 ETF against its 200-day average',height:260});
+
+  if (D.guardrails.length) p.append(el('div',{class:'block'}, el('h2',{},'Your limits'), el('div',{class:'two'}, D.guardrails.map(g=>el('div',{class:'panel block'}, el('span',{class:'chip '+(g.level==='warn'?'warn':'hold')}, g.level==='warn'?'Needs a look':g.level==='ok'?'Fine':'Tip'), el('h3',{},g.title), el('p',{class:'small muted'},g.detail))))));
+  p.append(el('div',{class:'pick'}, el('button',{class:'btn primary',type:'button',onclick:()=>show('plan',true)},'See the plan'), el('button',{class:'btn',type:'button',onclick:()=>show('record',true)},'Check the track record')));
+}
+
+/* ---------- tab: plan ---------- */
+function buildPlan(p){
+  p.append(el('div',{class:'block'}, el('h1',{},'Where your money would move'), el('p',{class:'lede'},'Hover or tap a band to see how much moves between two holdings. Bands that stay level are left alone.')));
+  const flow=el('div',{class:'panel'}); p.append(flow);
+
+  const box=el('div',{class:'panel block'});
+  const big=el('span',{class:'big'}), out=el('div',{class:'stats'}), list=el('div'), curve=el('div');
+  const inp=el('input',{type:'range',id:'theta',min:String(P.theta_min*1000),max:String(P.theta_max*1000),step:'1',value:String(Math.round(theta*1000)),'aria-label':'Smallest drift worth trading'});
+  box.append(el('div',{class:'slidehead'}, el('div',{style:'max-width:60ch'}, el('h2',{},'How big a drift is worth trading?'), el('p',{class:'small muted'},'Each holding drifts away from its target weight. Drifts smaller than this are skipped, because trading them costs more than it fixes.')), big), inp,
+    el('div',{class:'slidehead small muted'}, el('span',{},'0.5%: trade almost everything'), el('span',{},'5%: only big moves')), out, curve, el('h3',{style:'margin-top:8px'},'Orders at this setting'), list);
+  p.append(box);
   function draw(){
-    out.textContent = pc(theta, 1); const c = calcBlotter(theta);
-    body.innerHTML=''; body.append(el('table',{}, el('thead',{}, el('tr',{}, ['Ticker','Action','Shares now','Shares after','Weight now','Weight target','Drift','Value change','Est. cost','Est. tax','Engine'].map(h=>el('th',{},h)))),
-      el('tbody',{}, c.rows.map(r=>el('tr',{}, el('td',{}, el('b',{},r.symbol)), el('td',{}, el('span',{class:'tag '+(r.side==='BUY'?'buy':r.side==='SELL'?'sell':'hold')}, r.side)), el('td',{class:'n'},num(r.cur_shares,r.symbol==='CASH'?2:r.cur_shares%1?2:0)), el('td',{class:'n '+cls(r.dsh)}, num(r.newSh, r.newSh%1?2:0)),
-        el('td',{class:'n'},pc(r.cw)), el('td',{class:'n'},pc(r.tw)), el('td',{class:'n '+cls(r.drift)}, spc(r.drift,2)), el('td',{class:'n '+cls(r.dv)}, r.dv?((r.dv>0?'+':'-')+rs(Math.abs(r.dv))):'-'), el('td',{class:'n'}, r.cost?rs(r.cost):'-'), el('td',{class:'n'}, r.tax?rs(r.tax):'-'),
-        el('td',{}, r.engine?el('span',{class:'tag '+(r.engine==='BUY'?'buy':'sell')}, r.engine):el('span',{class:'hold'},'-'))))),
-      el('tfoot',{}, el('tr',{style:'font-weight:500'}, el('td',{}, 'Total'), el('td',{}, c.n+' orders'), el('td',{colspan:'5'}, ''), el('td',{class:'n'}, rs(c.vol)), el('td',{class:'n'}, rs(c.cost)), el('td',{class:'n'}, rs(c.tax)), el('td',{}, '')))));
-    sum.textContent = `At theta ${pc(theta)}: ${c.n} order(s), turnover ${pc(c.turnover)}, fees ${rs(c.cost)}, estimated tax ${rs(c.tax)} (${pc((c.cost+c.tax)/D.nav,2)} of portfolio). Wider theta means fewer, larger-drift trades.`;
-    const xs=[],t1=[],t2=[]; for(let v=P.theta_min; v<=P.theta_max+1e-9; v+=0.0025){ const k=calcBlotter(v); xs.push(v); t1.push(k.turnover); t2.push(k.cost+k.tax); }
-    miniChart($('#ch1'),xs,t1,{x:theta,y:c.turnover},v=>pc(v,0),'Turnover against threshold'); miniChart($('#ch2'),xs,t2,{x:theta,y:c.cost+c.tax},v=>v>=1000?Math.round(v/1000)+'k':Math.round(v),'Cost against threshold');
-    updateRegimeBar();
+    const c=blotter(theta); big.textContent=pc(theta,1);
+    out.innerHTML=''; [['Orders',String(c.n)],['Money moved',lakh(c.vol)],['Fees',rs(c.cost)],['Estimated tax',rs(c.tax)]].forEach(([a,b])=>out.append(el('div',{class:'stat'}, el('small',{},a), el('b',{},b))));
+    list.innerHTML=''; c.rows.forEach(r=>{ const engine = r.engine ? `The tax-aware plan says ${r.engine.toLowerCase()}.` : 'The tax-aware plan leaves it alone.';
+      list.append(el('div',{class:'trade'}, el('span',{class:'chip '+(r.side==='BUY'?'buy':r.side==='SELL'?'sell':'hold')}, r.side==='HOLD'?'Hold':r.side==='BUY'?'Buy':'Sell'), el('b',{},r.symbol), el('span',{class:'amt '+(r.dv>0?'buy':r.dv<0?'sell':'muted')}, r.dv ? (r.dv>0?'+':'-')+lakh(Math.abs(r.dv)) : 'no trade'),
+        el('span',{class:'sub'}, r.side==='HOLD' ? `${pc(r.cw)} now, target ${pc(r.tw)}. The drift of ${spc(r.drift)} is under the line. ${engine}` : `${num(Math.abs(r.dsh), Math.abs(r.dsh)%1?2:0)} units at about Rs ${num(r.price,2)}. Weight goes from ${pc(r.cw)} to ${pc(r.tw)}. Fees ${rs(r.cost)}${r.tax?`, tax about ${rs(r.tax)}`:''}. ${engine}`))); });
+    const xs=[],ys=[]; for (let x=P.theta_min; x<=P.theta_max+1e-9; x+=0.0025){ const k=blotter(x); xs.push(x); ys.push(k.turnover); }
+    miniCurve(curve, xs, ys, theta, c.turnover);
   }
-  inp.addEventListener('input',()=>{ theta = +inp.value/1000; draw(); });
-  draw(); addEventListener('resize',draw); texAll();
-})();
-
-/* ---------- 4. cross-sectional factor matrix ---------- */
-(function(){
-  const rows = D.cross_sectional_universe, p = panel('factors','Cross-sectional momentum matrix', `lookback ${P.lookback}, skip ${P.skip}, top K ${P.top_k}. Click a header for its formula, a row for its numbers.`);
-  const ms = rows.map(r=>r.M).filter(x=>x!=null); const mu = ms.reduce((a,b)=>a+b,0)/ms.length; const sd = Math.sqrt(ms.reduce((a,b)=>a+(b-mu)**2,0)/ms.length);
-  const drawer = el('div',{class:'fx',hidden:''}); p.append(drawer);
-  function open(k){ drawer.hidden=false; drawer.innerHTML=''; const f=fnode(k); drawer.append(f, el('div',{class:'muted'}, FORMULAS[k].note + (k==='z'?` Universe mean ${mu.toFixed(2)}, stdev ${sd.toFixed(2)}.`:'') + ` Parameters: lookback ${P.lookback} days, skip ${P.skip} days, top K ${P.top_k}.`)); renderTex(f); }
-  const th = (k,l,c)=>el('th',{class:c||''}, k?el('button',{class:'thbtn',type:'button',onclick:()=>open(k)},l):l);
-  const tb = el('tbody'); let openRow = null;
-  rows.forEach(r=>{
-    const tr = el('tr',{style:'cursor:pointer',tabindex:'0','aria-expanded':'false'}, el('td',{class:'n muted'},String(r.rank)), el('td',{class:'l'}, el('b',{},r.symbol), ' ', el('span',{class:'muted'}, r.tier||r.region)), el('td',{class:'n '+cls(r.R)}, spc(r.R)), el('td',{class:'n'}, pc(r.sigma,1)), el('td',{class:'n'}, r.M==null?'-':r.M.toFixed(2)), el('td',{class:'n '+cls(r.z)}, r.z==null?'-':r.z.toFixed(2)),
-      el('td',{}, r.in_target?el('span',{class:'tag buy'},'IN TARGET'):'', r.held?el('span',{class:'tag hold',style:'margin-left:4px'},'HELD'):''));
-    const detail = el('tr',{hidden:''}, el('td',{colspan:'7',class:'wrap',style:'text-align:left'}, el('div',{class:'mono muted'}, `R = ${r.R.toFixed(3)}   sigma = ${r.sigma.toFixed(3)}   M = ${r.R.toFixed(3)} / ${r.sigma.toFixed(3)} = ${r.M==null?'-':r.M.toFixed(2)}   z = (${r.M==null?'-':r.M.toFixed(2)} - ${mu.toFixed(2)}) / ${sd.toFixed(2)} = ${r.z==null?'-':r.z.toFixed(2)}`), el('div',{class:'muted'}, `${r.name}. ${r.region==='US'?'US-listed, via LRS.':'India-listed.'} ${r.in_target?'The engine wants it in the target.':'Not in the target.'}`)));
-    const tg = ()=>{ const o=detail.hidden; detail.hidden=!o; tr.classList.toggle('open',o); tr.setAttribute('aria-expanded',o); };
-    tr.addEventListener('click',tg); tr.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){e.preventDefault();tg();} });
-    tb.append(tr, detail);
-  });
-  p.append(el('div',{class:'scroll'}, el('table',{}, el('thead',{}, el('tr',{}, [th('', 'Rank'), th('', 'Ticker', 'l'), th('R','12-1m return R'), th('sigma','Volatility'), th('M','M = R / sigma'), th('z','z-score'), th('', 'Status')])), tb)));
-  // market-cap tiers
-  const tiers = ['Large cap','Next 50','Mid cap'].map(t=>rows.find(r=>r.tier===t)).filter(Boolean);
-  if (tiers.length>1) { const base = tiers[0]; p.append(el('div',{class:'fx'}, el('b',{},'Relative momentum across market-cap tiers'), el('div',{class:'scroll'}, el('table',{}, el('thead',{}, el('tr',{}, ['Tier','Proxy','R','M','R vs large cap'].map(h=>el('th',{class:h==='Proxy'?'l':''},h)))), el('tbody',{}, tiers.map(r=>el('tr',{}, el('td',{},r.tier), el('td',{class:'l'},r.symbol), el('td',{class:'n'},spc(r.R)), el('td',{class:'n'},r.M.toFixed(2)), el('td',{class:'n '+cls(r.R-base.R)}, r===base?'-':spc(r.R-base.R)))))), el('div',{class:'muted'},'No small-cap ETF is in the universe yet, so the tier ladder stops at mid cap.')))); }
-  p.append(el('div',{class:'fx muted'}, 'Cost model: fees are commission plus statutory charges plus half-spread, from config/settings.yaml, applied per order in the blotter. Liquidity is not measured here (volume data is not loaded); the universe is a hand-picked list of large ETFs, so check volume before sizing big orders. Cash shelter: when the regime is CASH_PRESERVATION the target shifts toward the cash sleeve, shown in the bar at the top.'));
-  const fx = el('div',{class:'fx'}); fx.append(el('b',{},'Formulas '), ...Object.keys(FORMULAS).map(k=>el('div',{style:'margin-top:4px'}, fnode(k)))); p.append(fx); texAll();
-})();
-
-/* ---------- 5. money movement (flow) ---------- */
-(function(){
-  const p = panel('money','Where the money moves','left: now, right: target. Rose bands are money being moved.');
-  const cur = D.current, tgt = D.target;
-  const body = el('div',{class:'pb'}); p.append(body);
-  if (!cur.length) { body.append(el('p',{class:'muted'},'No holdings loaded yet.')); return; }
-  const W=820, H=Math.max(280, Math.max(cur.length,tgt.length)*32+50), padT=20, gap=8, nodeW=12, lx=170, rx=W-170-nodeW, total=Math.max(D.nav,1);
-  const scale=(H-padT*2-gap*Math.max(cur.length,tgt.length))/total;
-  const svg=sv('svg',{viewBox:`0 0 ${W} ${H}`,width:'100%',role:'img','aria-label':'Money flow from current holdings to target holdings'});
-  const place=(arr,x)=>{ let y=padT; const m={}; arr.forEach(n=>{ const h=Math.max(n.value*scale,3); m[n.symbol]={...n,y,h,x}; y+=h+gap; }); return m; };
-  const L=place(cur,lx), R=place(tgt,rx); const syms=new Set([...Object.keys(L),...Object.keys(R)]);
-  const stay={},sells={},buys={}; let buyTot=0;
-  syms.forEach(k=>{ const a=(L[k]||{value:0}).value,b=(R[k]||{value:0}).value; stay[k]=Math.min(a,b); sells[k]=Math.max(0,a-b); buys[k]=Math.max(0,b-a); buyTot+=buys[k]; });
-  const offL={},offR={}; syms.forEach(k=>{offL[k]=0;offR[k]=0;});
-  const band=(k1,k2,v,color,label)=>{ if(v*scale<0.5) return; const a=L[k1],b=R[k2],h=v*scale,y1=a.y+offL[k1],y2=b.y+offR[k2]; offL[k1]+=h; offR[k2]+=h; const x1=a.x+nodeW,x2=b.x,mx=(x1+x2)/2;
-    const path=sv('path',{d:`M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2} L${x2},${y2+h} C${mx},${y2+h} ${mx},${y1+h} ${x1},${y1+h} Z`,fill:color,opacity:k1===k2?.25:.55,tabindex:0});
-    path.addEventListener('mousemove',e=>showTip(e,label)); path.addEventListener('mouseleave',hideTip); path.addEventListener('focus',()=>{const r=path.getBoundingClientRect();showTip({clientX:r.x+r.width/2,clientY:r.y},label)}); path.addEventListener('blur',hideTip); svg.append(path); };
-  syms.forEach(k=>{ if(L[k]&&R[k]) band(k,k,stay[k],SLEEVE[L[k].sleeve]||'#64748b',`${k}: keep ${rs(stay[k])}`); });
-  syms.forEach(k=>{ if(!L[k]||sells[k]<1) return; syms.forEach(j=>{ if(!R[j]||buys[j]<1||buyTot<=0) return; const v=sells[k]*buys[j]/buyTot; band(k,j,v,'#e11d48',`Move ${rs(v)} from ${k} to ${j}`); }); });
-  const node=(n,side)=>{ svg.append(sv('rect',{x:n.x,y:n.y,width:nodeW,height:n.h,fill:SLEEVE[n.sleeve]||'#64748b'})); const x=side==='L'?n.x-6:n.x+nodeW+6, a=side==='L'?'end':'start';
-    const t=sv('text',{x,y:n.y+Math.min(n.h/2+4,14),'text-anchor':a,fill:'var(--ink)','font-size':12}); t.textContent=`${n.symbol} ${(n.value/total*100).toFixed(0)}%`; svg.append(t);
-    if(n.h>28){ const t2=sv('text',{x,y:n.y+Math.min(n.h/2+4,14)+13,'text-anchor':a,fill:'var(--muted)','font-size':11}); t2.textContent=rs(n.value); svg.append(t2); } };
+  inp.addEventListener('input',()=>{ theta=+inp.value/1000; store('theta',theta); draw(); });
+  p.append(el('p',{class:'small muted',style:'max-width:70ch'},'The slider shows a simple drift rule. The engine\'s own plan also weighs tax, signal strength and costs, and the Steps tab follows that plan. Tax here is an estimate that ignores the Rs 1.25 lakh yearly exemption and loss set-off.'));
+  redraw.plan = () => { drawFlow(flow); draw(); };
+}
+function miniCurve(host, xs, ys, x0, y0){
+  host.innerHTML=''; const W=Math.max(host.clientWidth||500,280), H=140, m={l:44,r:12,t:24,b:24}; const hi=Math.max(...ys,0.01)*1.15;
+  const X=v=>m.l+(W-m.l-m.r)*(v-xs[0])/(xs[xs.length-1]-xs[0]), Y=v=>m.t+(H-m.t-m.b)*(1-v/hi);
+  const svg=sv('svg',{viewBox:`0 0 ${W} ${H}`,width:'100%',height:H,role:'img','aria-label':'Share of portfolio traded at each threshold'});
+  svg.append(sv('text',{x:m.l,y:13,'font-size':12,fill:css('--muted')},'Share of portfolio traded at each setting'));
+  [0,hi/2].forEach(v=>{ svg.append(sv('line',{x1:m.l,x2:W-m.r,y1:Y(v),y2:Y(v),stroke:css('--line')}), sv('text',{x:m.l-6,y:Y(v)+4,'text-anchor':'end','font-size':11,fill:css('--muted')},pc(v,0))); });
+  [0.005,0.02,0.035,0.05].forEach(v=>svg.append(sv('text',{x:X(v),y:H-6,'text-anchor':'middle','font-size':11,fill:css('--muted')},pc(v,1))));
+  const d=xs.map((x,i)=>(i?'L':'M')+X(x).toFixed(1)+','+Y(ys[i]).toFixed(1)).join('');
+  svg.append(sv('path',{d:d+`L${X(xs[xs.length-1])},${Y(0)}L${X(xs[0])},${Y(0)}Z`,fill:css('--accent-wash')}), sv('path',{d,fill:'none',stroke:css('--accent'),'stroke-width':2}), sv('circle',{cx:X(x0),cy:Y(y0),r:6,fill:css('--accent'),stroke:css('--surface'),'stroke-width':2}));
+  host.append(svg);
+}
+function drawFlow(host){
+  host.innerHTML=''; const cur=D.current, tgt=D.target; if (!cur.length){ host.append(el('p',{class:'muted'},'No holdings loaded yet. Import them in the shell with import-kite.')); return; }
+  const narrow=host.clientWidth<600, W=narrow?560:880, total=Math.max(D.nav,1), gap=10, nodeW=14, lx=narrow?112:190, rx=W-(narrow?112:190)-nodeW;
+  const H=Math.max(300, Math.max(cur.length,tgt.length)*44+60), padT=30, scale=(H-padT-20-gap*Math.max(cur.length,tgt.length))/total;
+  const SL={india_equity:'--s1',global_equity:'--s2',gold:'--s4',metals:'--s8',semis:'--s3',commodity:'--s8',bonds:'--s6',cash:'--s3',other:'--s8'};
+  const col=n=>css(SL[n.sleeve]||'--s8');
+  const svg=sv('svg',{viewBox:`0 0 ${W} ${H}`,width:'100%',role:'img','aria-label':'Money moving from current holdings to target holdings'});
+  svg.append(sv('text',{x:lx+nodeW/2,y:16,'text-anchor':'middle','font-size':13,'font-weight':600,fill:css('--muted')},'Now'), sv('text',{x:rx+nodeW/2,y:16,'text-anchor':'middle','font-size':13,'font-weight':600,fill:css('--muted')},'After'));
+  const place=(arr,x)=>{ let y=padT; const m={}; arr.forEach(n=>{ const h=Math.max(n.value*scale,4); m[n.symbol]=Object.assign({},n,{y,h,x}); y+=h+gap; }); return m; };
+  const L=place(cur,lx), R=place(tgt,rx), syms=new Set([...Object.keys(L),...Object.keys(R)]);
+  const stay={},sells={},buys={}; let buyTot=0; syms.forEach(k=>{ const a=(L[k]||{value:0}).value, b=(R[k]||{value:0}).value; stay[k]=Math.min(a,b); sells[k]=Math.max(0,a-b); buys[k]=Math.max(0,b-a); buyTot+=buys[k]; });
+  const oL={},oR={}; syms.forEach(k=>{oL[k]=0;oR[k]=0;}); const bands=[];
+  const rest=q=>q.setAttribute('fill-opacity', q.dataset.a===q.dataset.b?.22:.45);
+  const band=(k1,k2,v,color,label)=>{ if(v*scale<0.6) return; const a=L[k1],b=R[k2],h=v*scale,y1=a.y+oL[k1],y2=b.y+oR[k2]; oL[k1]+=h; oR[k2]+=h; const x1=a.x+nodeW,x2=b.x,mx=(x1+x2)/2;
+    const path=sv('path',{d:`M${x1},${y1}C${mx},${y1} ${mx},${y2} ${x2},${y2}L${x2},${y2+h}C${mx},${y2+h} ${mx},${y1+h} ${x1},${y1+h}Z`,fill:color,tabindex:0,'data-a':k1,'data-b':k2,'aria-label':label.replace(/<[^>]+>/g,' ')}); rest(path);
+    const on=e=>{ bands.forEach(q=>q.setAttribute('fill-opacity', q===path ? .8 : .08)); showTip(e,label); }; const off=()=>{ bands.forEach(rest); hideTip(); };
+    path.addEventListener('pointermove',on); path.addEventListener('pointerleave',off); path.addEventListener('focus',()=>{ const r=path.getBoundingClientRect(); on({clientX:r.x+r.width/2,clientY:r.y}); }); path.addEventListener('blur',off);
+    bands.push(path); svg.append(path); };
+  syms.forEach(k=>{ if(L[k]&&R[k]) band(k,k,stay[k],col(L[k]),`<b>${k}</b><br>Keep ${rs(stay[k])}`); });
+  syms.forEach(k=>{ if(!L[k]||sells[k]<1) return; syms.forEach(j=>{ if(!R[j]||buys[j]<1||buyTot<=0) return; const v=sells[k]*buys[j]/buyTot; band(k,j,v,css('--sell'),`<b>${k} to ${j}</b><br>Move ${rs(v)}`); }); });
+  const node=(n,side)=>{ svg.append(sv('rect',{x:n.x,y:n.y,width:nodeW,height:n.h,rx:3,fill:col(n)})); const x=side==='L'?n.x-8:n.x+nodeW+8, a=side==='L'?'end':'start', y=n.y+Math.min(n.h/2,14)+4;
+    svg.append(sv('text',{x,y,'text-anchor':a,'font-size':13,'font-weight':600,fill:css('--ink')}, n.symbol)); if(n.h>26) svg.append(sv('text',{x,y:y+15,'text-anchor':a,'font-size':12,fill:css('--muted')}, `${lakh(n.value)}, ${(n.value/total*100).toFixed(0)}%`)); };
   Object.values(L).forEach(n=>node(n,'L')); Object.values(R).forEach(n=>node(n,'R'));
-  body.append(svg);
-  const leg=el('div',{style:'display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted)'}); [...new Set([...cur,...tgt].map(n=>n.sleeve))].forEach(sl=>leg.append(el('span',{}, el('span',{class:'sw',style:'background:'+SLEEVE[sl]}),' '+(SLEEVE_NAME[sl]||sl)))); leg.append(el('span',{}, el('span',{class:'sw',style:'background:#e11d48'}),' moving')); body.append(leg);
-  if (D.others.length) body.append(el('p',{class:'muted'}, `Not shown, not traded: ${D.others.length} other investment(s) worth ${rs(D.others.reduce((a,o)=>a+o.value,0))} (${D.others.map(o=>o.name).join(', ')}). They count in your limits.`));
-})();
-
-/* ---------- 6. inputs considered ---------- */
-(function(){
-  const p = panel('why','Inputs considered','one row per factor');
-  const lab = {ok:'OK',warn:'WATCH',bad:'ALERT',info:'INFO'}, tcls = {ok:'buy',warn:'warn',bad:'sell',info:'hold'};
-  p.append(el('div',{class:'scroll'}, el('table',{}, el('tbody',{}, D.factors.map(f=>el('tr',{}, el('td',{class:'l'}, el('b',{},f.name)), el('td',{}, el('span',{class:'tag '+tcls[f.status]}, lab[f.status])), el('td',{class:'l wrap'}, f.line), el('td',{class:'wrap muted'}, f.detail)))))));
-  if (D.policy_why && D.policy_why.length) p.append(el('div',{class:'fx'}, el('b',{},'How the strategy reached its target'), el('ul',{style:'margin:4px 0 0;padding-left:18px'}, D.policy_why.map(w=>el('li',{},w)))));
-  if (D.holdings.length) p.append(el('div',{class:'scroll fx'}, el('b',{},'Your lots'), el('table',{}, el('thead',{}, el('tr',{}, ['Holding','Bought','Units','Cost','Value','Gain','Tax status'].map(h=>el('th',{},h)))), el('tbody',{}, D.holdings.map(h=>el('tr',{}, el('td',{},h.symbol), el('td',{class:'n'},h.buy_date), el('td',{class:'n'},num(h.qty,2)), el('td',{class:'n'},rs(h.cost)), el('td',{class:'n'},rs(h.value)), el('td',{class:'n '+cls(h.gain)},rs(h.gain)), el('td',{class:'l'},h.term)))))));
-  if (D.notes.length) p.append(el('div',{class:'fx'}, el('b',{},'Also worth knowing'), el('ul',{style:'margin:4px 0 0;padding-left:18px'}, D.notes.map(n=>el('li',{},n)))));
-})();
-
-/* ---------- line chart ---------- */
-function lineChart(host, o) {
-  host.innerHTML=''; const W=Math.max(host.clientWidth,320), H=o.height||320, m={l:52,r:10,t:10,b:24}; const n=o.dates.length, xs=i=>m.l+(W-m.l-m.r)*i/Math.max(n-1,1);
-  let lo=Infinity, hi=-Infinity; o.series.forEach(s=>s.vals.forEach(v=>{ if(v!=null){lo=Math.min(lo,v);hi=Math.max(hi,v);} })); const pad=(hi-lo)*.06||1; lo-=pad; hi+=pad; const ys=v=>m.t+(H-m.t-m.b)*(1-(v-lo)/(hi-lo));
-  const svg=sv('svg',{viewBox:`0 0 ${W} ${H}`,width:'100%',height:H,role:'img','aria-label':o.label||'chart'});
-  for(let k=0;k<=4;k++){ const v=lo+(hi-lo)*k/4,y=ys(v); svg.append(sv('line',{x1:m.l,x2:W-m.r,y1:y,y2:y,stroke:'var(--line)'})); const t=sv('text',{x:m.l-6,y:y+4,'text-anchor':'end','font-size':11,fill:'var(--muted)'}); t.textContent=o.fmt?o.fmt(v):Math.round(v); svg.append(t); }
-  const seen=new Set(); for(let i=0;i<n;i++){ const d=o.dates[i],key=d.slice(0,7); if(d.slice(8,10)<'05'&&!seen.has(key)&&(+d.slice(5,7)-1)%(o.every||3)===0){ seen.add(key); const t=sv('text',{x:xs(i),y:H-8,'text-anchor':'middle','font-size':11,fill:'var(--muted)'}); t.textContent=d.slice(0,7); svg.append(t);} }
-  o.series.forEach(s=>{ let d=''; s.vals.forEach((v,i)=>{ if(v==null)return; d+=(d?'L':'M')+xs(i).toFixed(1)+','+ys(v).toFixed(1); }); svg.append(sv('path',{d,fill:'none',stroke:s.color,'stroke-width':s.w||1.6,'stroke-dasharray':s.dash||'','stroke-linejoin':'round'})); });
-  const cross=sv('line',{y1:m.t,y2:H-m.b,stroke:'var(--muted)','stroke-dasharray':'3 3',opacity:0}); svg.append(cross);
-  const ov=sv('rect',{x:m.l,y:m.t,width:W-m.l-m.r,height:H-m.t-m.b,fill:'transparent'}); svg.append(ov);
-  (o.markers||[]).forEach(mk=>{ const c=sv('rect',{x:xs(mk.i)-4,y:ys(mk.y)-4,width:8,height:8,fill:mk.color,stroke:'var(--panel)','stroke-width':1.5,tabindex:0,role:'button','aria-label':mk.label,style:'cursor:pointer'});
-    c.addEventListener('mousemove',e=>{e.stopPropagation();showTip(e,mk.label)}); c.addEventListener('mouseleave',hideTip); c.addEventListener('click',e=>{e.stopPropagation();mk.click()}); c.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();mk.click()}}); svg.append(c); });
-  ov.addEventListener('mousemove',e=>{ const r=svg.getBoundingClientRect(),px=(e.clientX-r.left)*W/r.width,i=Math.max(0,Math.min(n-1,Math.round((px-m.l)/(W-m.l-m.r)*(n-1)))); cross.setAttribute('x1',xs(i)); cross.setAttribute('x2',xs(i)); cross.setAttribute('opacity',1);
-    showTip(e,`${o.dates[i]}<br>`+o.series.filter(s=>s.vals[i]!=null).map(s=>`${s.name}: ${o.fmt?o.fmt(s.vals[i]):Math.round(s.vals[i])}`).join('<br>')); });
-  ov.addEventListener('mouseleave',()=>{cross.setAttribute('opacity',0);hideTip();});
-  host.append(svg);
+  host.append(el('div',{class:'scroll'}, svg));
+  const sleeves=[...new Set([...cur,...tgt].map(n=>n.sleeve))]; const NAME={india_equity:'India equity',global_equity:'Global equity',gold:'Gold',metals:'Metals',semis:'Chips',commodity:'Commodities',bonds:'Bonds',cash:'Cash',other:'Other'};
+  host.append(el('div',{style:'margin-top:12px'}, legend(sleeves.map(s=>({name:NAME[s]||s,color:css(SL[s]||'--s8')})).concat([{name:'Money moving',color:css('--sell')}]))));
+  if (D.others.length) host.append(el('p',{class:'small muted',style:'margin-top:12px'}, `Not shown and never traded: ${D.others.map(o=>o.name).join(', ')}, worth ${lakh(D.others.reduce((a,o)=>a+o.value,0))} together. They count toward your limits.`));
 }
 
-/* ---------- 7. backtest replay ---------- */
-(function(){
-  const B=D.backtest, p=panel('backtest','Replay of the last 12 months','square markers are days money moved; click one for the reason and the price chart');
-  if(!B){ p.append(el('div',{class:'pb muted'},'Run `python main.py site` to include the replay.')); return; }
-  const names=Object.keys(B.series), base=names[0]; let sel=new Set([base,B.active||names[0]]), focus=B.active||names[0]; const colorOf=n=>PAL[names.indexOf(n)%PAL.length];
-  const chips=el('div',{class:'chips',role:'group','aria-label':'Strategies'}); p.append(chips); const host=el('div',{class:'pb'}); p.append(host);
-  const fsel=el('select',{'aria-label':'Show moves for',style:'padding:4px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:3px'}); names.forEach(n=>fsel.append(el('option',{value:n},n))); fsel.value=focus;
-  p.append(el('div',{class:'fx'}, el('label',{class:'muted'},'Show the moves of: ',fsel)));
-  const detail=el('div',{class:'fx'}); p.append(detail); const tbl=el('div',{class:'scroll'}); p.append(tbl);
-  fsel.addEventListener('change',()=>{focus=fsel.value; sel.add(focus); draw(); detail.innerHTML='<span class="muted">Click a marker on the chart.</span>';});
-  function draw(){
-    chips.innerHTML=''; names.forEach(n=>chips.append(el('button',{class:'chip','aria-pressed':sel.has(n),type:'button',onclick:()=>{ if(sel.has(n)&&sel.size>1) sel.delete(n); else sel.add(n); draw(); }}, el('span',{class:'sw',style:'background:'+colorOf(n)}), n)));
-    const series=[...sel].map(n=>({name:n,color:colorOf(n),vals:B.series[n].map(v=>v/B.series[base][0]*100),w:n===base?2:1.5,dash:n===base?'5 4':''})); const idx=Object.fromEntries(B.dates.map((d,i)=>[d,i]));
-    const mk=(B.events[focus]||[]).filter(e=>idx[e.date]!=null).map(e=>({i:idx[e.date],y:B.series[focus][idx[e.date]]/B.series[base][0]*100,color:e.type==='sell'?'#e11d48':e.type==='buy'?'#059669':'#b45309',label:e.type==='tax'?`${e.date}: ${e.why}`:`${e.date}: ${e.type.toUpperCase()} ${e.symbol} ${rs(e.value)}`,click:()=>showEvent(e)}));
-    lineChart(host,{dates:B.dates,series,markers:mk,fmt:v=>v.toFixed(1),label:'Portfolio value, start = 100',every:2});
-    host.append(el('div',{class:'muted',style:'font-size:12px'},'Start = 100, after fees, tax paid each financial year. Green = buy, rose = sell, amber = tax paid. Dashed = doing nothing.'));
-    tbl.innerHTML=''; tbl.append(el('table',{}, el('thead',{}, el('tr',{}, ['Strategy','Return','After tax if sold','Worst fall','Tax paid','Fees','Turnover'].map(h=>el('th',{},h)))), el('tbody',{}, B.summary.filter(r=>sel.has(r.name)).map(r=>el('tr',{}, el('td',{}, el('span',{class:'sw',style:'background:'+colorOf(r.name)}),' '+r.name), el('td',{class:'n '+cls(r.ret)},spc(r.ret)), el('td',{class:'n '+cls(r.after_tax)},spc(r.after_tax)), el('td',{class:'n'},pc(r.mdd)), el('td',{class:'n'},rs(r.taxes)), el('td',{class:'n'},rs(r.costs)), el('td',{class:'n'},r.turnover.toFixed(1)+'x'))))));
+/* ---------- tab: steps ---------- */
+function buildSteps(p){
+  const hold=D.verdict.call==='HOLD';
+  p.append(el('div',{class:'block'}, el('h1',{}, hold?'Nothing to do today':'Place the orders in this order'), el('p',{class:'lede'}, hold?'These steps are here if you decide to act anyway, and to keep your records current.':'Tick each step as you finish it. Your ticks are saved in this browser.')));
+  const key='steps-'+D.asof; const saved=store(key)||{};
+  const bar=el('div',{class:'progress'},el('i')), cnt=el('p',{class:'small muted'}); const ol=el('ol',{class:'steps'});
+  const upd=()=>{ const n=D.steps.length, d=Object.values(saved).filter(Boolean).length; bar.firstChild.style.width=(d/n*100)+'%'; cnt.textContent=`${d} of ${n} done`; };
+  D.steps.forEach((st,i)=>{ const id='step'+i, cb=el('input',{type:'checkbox',id}); cb.checked=!!saved[i];
+    const li=el('li',{class:saved[i]?'done':''}, cb, el('div',{style:'min-width:0'}, el('label',{for:id}, st.title), el('div',{class:'d'}, st.detail), st.cmd?el('div',{class:'d'}, el('code',{}, st.cmd)):null, (st.why&&st.why.length)?el('details',{style:'border:0;padding:4px 0 0'}, el('summary',{},'Why this trade'), el('div',{class:'d'}, st.why.join(' '))):null));
+    cb.addEventListener('change',()=>{ saved[i]=cb.checked; li.classList.toggle('done',cb.checked); store(key,saved); upd(); }); ol.append(li); });
+  p.append(el('div',{class:'panel block'}, bar, cnt, ol)); upd();
+}
+
+/* ---------- tab: track record ---------- */
+function buildReplay(p){
+  const B=D.backtest, V=D.validation; const draws=[];
+  p.append(el('div',{class:'block'}, el('h1',{},'Would this have worked?'), el('p',{class:'lede'},'The engine replayed the last 12 months day by day with your lots, real prices, fees and Indian tax. Each dot is a day it moved money. Pick a dot to see why.')));
+  if (B){
+    const names=Object.keys(B.series), base=names[0], active=B.active||names[1];
+    const color=()=>css('--s1');
+    let other=active;
+    const panel=el('div',{class:'panel block'}); p.append(panel);
+    const sel=el('select',{id:'strat','aria-label':'Strategy to compare',class:'btn'}); names.slice(1).forEach(n=>sel.append(el('option',{value:n}, n + (n===active?' (in use)':'')))); sel.value=other;
+    const stats=el('div',{class:'stats'}), host=el('div'), lg=el('div'), ev=el('div',{class:'event'});
+    panel.append(el('div',{class:'slidehead'}, el('h2',{},'Doing nothing against'), sel), host, lg, stats, ev);
+    const idx=Object.fromEntries(B.dates.map((d,i)=>[d,i]));
+    const rest=()=>{ ev.innerHTML=''; ev.append(el('p',{class:'muted'},'Pick a dot on the chart to see the trade, the reason and the price around it.')); };
+    sel.addEventListener('change',()=>{ other=sel.value; rest(); draw(); });
+    function draw(){
+      const s0=B.series[base][0];
+      const mk=(B.events[other]||[]).filter(e=>idx[e.date]!=null).map(e=>({i:idx[e.date], y:B.series[other][idx[e.date]]/s0*100, color:e.type==='buy'?css('--buy'):e.type==='sell'?css('--sell'):css('--warn'), label:e.type==='tax'?`<b>${e.date}</b><br>${e.why}`:`<b>${e.date}</b><br>${e.type==='buy'?'Bought':'Sold'} ${e.symbol}, ${rs(e.value)}`, click:()=>showEvent(e)}));
+      lineChart(host,{dates:B.dates,series:[{name:'Doing nothing',short:'Doing nothing',color:css('--faint'),vals:B.series[base].map(v=>v/s0*100),dash:'6 4'},{name:other,short:'Strategy',color:color(other),vals:B.series[other].map(v=>v/s0*100),w:2.5}],markers:mk,fmt:v=>v.toFixed(0),label:'Portfolio value, start = 100',endLabels:true,height:300});
+      lg.innerHTML=''; lg.append(legend([{name:'Doing nothing',color:css('--faint'),dash:true},{name:'Strategy',color:color(other)},{name:'Buy',color:css('--buy')},{name:'Sell',color:css('--sell')},{name:'Tax paid',color:css('--warn')}]));
+      const a=B.summary.find(x=>x.name===other), b=B.summary.find(x=>x.name===base);
+      stats.innerHTML=''; [['After tax, if sold today',`${spc(a.after_tax)} vs ${spc(b.after_tax)}`],['Worst fall',`${pc(a.mdd)} vs ${pc(b.mdd)}`],['Tax paid',rs(a.taxes)],['Fees',rs(a.costs)]].forEach(([x,y])=>stats.append(el('div',{class:'stat'},el('small',{},x),el('b',{},y))));
+    }
+    function showEvent(e){
+      ev.innerHTML=''; if (e.type==='tax'){ ev.append(el('h3',{},`${e.date}: tax paid`), el('p',{class:'muted'},e.why)); return; }
+      ev.append(el('h3',{}, `${e.date}: ${e.type==='buy'?'bought':'sold'} ${e.symbol}`), el('p',{class:'muted'}, `${e.pct}% of a ${rs(e.value)} order at Rs ${num(e.price,2)}. ${e.why||''}`));
+      const pdat=B.px[e.symbol], i=pdat?B.px_dates.indexOf(e.date):-1;
+      if (i>=0){ const a=Math.max(0,i-60), b=Math.min(pdat.length,i+61), sl=pdat.slice(a,b), b0=sl.find(v=>v!=null)||1, h=el('div'); ev.append(el('p',{class:'small muted',style:'margin-top:10px'},`${e.symbol} price three months either side. The dot is the trade.`), h);
+        lineChart(h,{dates:B.px_dates.slice(a,b),series:[{name:e.symbol,color:css('--ink'),vals:sl.map(v=>v==null?null:v/b0*100),w:1.5}],markers:[{i:i-a,y:sl[i-a]/b0*100,color:e.type==='sell'?css('--sell'):css('--buy'),label:'Trade day',click:()=>{}}],fmt:v=>v.toFixed(0),label:e.symbol+' price around the trade',height:170}); }
+      if (e.tv) ev.append(el('p',{style:'margin-top:8px'}, el('a',{href:'https://www.tradingview.com/chart/?symbol='+encodeURIComponent(e.tv),target:'_blank',rel:'noopener'},`Open ${e.symbol} live on TradingView`)));
+    }
+    rest(); draws.push(draw);
   }
-  function showEvent(e){
-    detail.innerHTML=''; if(e.type==='tax'){ detail.append(el('b',{},e.date+'  tax paid'), el('div',{},e.why)); return; }
-    detail.append(el('b',{},`${e.date}  ${e.type.toUpperCase()} ${e.symbol}`), el('div',{},`${e.pct}% of a ${rs(e.value)} order at Rs ${e.price.toLocaleString('en-IN')} (${e.kind.replace('_',' ')}). ${e.why||''}`));
-    const pd=B.px[e.symbol]; if(pd){ const i=B.px_dates.indexOf(e.date); if(i>=0){ const a=Math.max(0,i-60), b=Math.min(pd.length,i+61), sl=pd.slice(a,b), b0=sl.find(v=>v!=null)||1, h=el('div'); detail.append(el('div',{class:'muted',style:'margin-top:6px'},`${e.symbol} price, 60 trading days either side`),h); const mi=i-a;
-      lineChart(h,{dates:B.px_dates.slice(a,b),series:[{name:e.symbol,color:'var(--ink)',vals:sl.map(v=>v==null?null:v/b0*100)}],markers:[{i:mi,y:sl[mi]/b0*100,color:e.type==='sell'?'#e11d48':'#059669',label:e.type+' here',click:()=>{}}],height:160,fmt:v=>v.toFixed(0),every:1}); } }
-    if(e.tv){ const btn=el('button',{class:'btn',type:'button',style:'margin-top:6px',onclick:()=>{ btn.replaceWith(el('iframe',{class:'tv',title:'Live chart for '+e.symbol,loading:'lazy',src:`https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(e.tv)}&interval=D&theme=${matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}&style=1&hidesidetoolbar=1&withdateranges=1`})); }},'Load live chart for '+e.symbol+' (TradingView)'); detail.append(btn); }
+  if (V){
+    const box=el('div',{class:'panel block'}); p.append(box);
+    box.append(el('h2',{},'Over 10 years, how often did each strategy beat doing nothing?'), el('p',{class:'small muted'},`From ${V.start} to ${V.end}, tested in every rolling ${V.window_years}-year window, after fees and tax. Click a bar for its numbers.`));
+    const host=el('div'), info=el('div',{class:'event'}); box.append(host, legend([{name:'Passed: dependable or promising edge',color:css('--buy')},{name:'No reliable edge',color:css('--faint')}]), info);
+    info.append(el('p',{class:'muted'},'Click a bar.'));
+    const rows=V.rows.slice(1).sort((a,b)=>(b.win_rate||0)-(a.win_rate||0));
+    const drawE=()=>{
+      host.innerHTML=''; const W=Math.max(host.clientWidth||600,300), rowH=34, lab=Math.min(300, W*.48), H=rows.length*rowH+30, X=v=>lab+(W-lab-50)*v;
+      const short=s=>{ const max=Math.floor(lab/7.2); return s.length>max ? s.slice(0,max-1)+'...' : s; };
+      const svg=sv('svg',{viewBox:`0 0 ${W} ${H}`,width:'100%',height:H,role:'img','aria-label':'Share of 3-year windows each strategy beat doing nothing'});
+      [0,.5,1].forEach(v=>{ svg.append(sv('line',{x1:X(v),x2:X(v),y1:0,y2:H-22,stroke:css('--line')}), sv('text',{x:X(v),y:H-6,'text-anchor':'middle','font-size':12,fill:css('--muted')},pc(v,0))); });
+      rows.forEach((r,k)=>{ const y=k*rowH+6, good=r.verdict==='robust edge'||r.verdict==='promising, not proven', act=B&&r.name===B.active;
+        const g=sv('g',{tabindex:0,role:'button','aria-label':`${r.name}: beat doing nothing in ${pc(r.win_rate,0)} of windows`,style:'cursor:pointer'});
+        g.append(sv('rect',{x:0,y,width:W,height:rowH-4,fill:'transparent'}), sv('text',{x:lab-10,y:y+15,'text-anchor':'end','font-size':13,'font-weight':act?700:400,fill:css('--ink')}, short((act?'In use: ':'')+r.name)),
+          sv('rect',{x:X(0),y:y+2,width:Math.max(3,X(r.win_rate||0)-X(0)),height:18,rx:4,fill:good?css('--buy'):css('--faint')}), sv('text',{x:X(r.win_rate||0)+6,y:y+16,'font-size':12,fill:css('--muted')},pc(r.win_rate,0)));
+        const pick=()=>{ info.innerHTML=''; info.append(el('h3',{},r.name), el('p',{class:'muted'}, `${pc(r.cagr_after_tax)} a year after tax over 10 years, against ${pc(V.rows[0].cagr_after_tax)} for doing nothing. Worst fall ${pc(r.max_drawdown)}, against ${pc(V.rows[0].max_drawdown)}. In a typical 3-year window it was ${spc(r.median_excess)} a year ahead of doing nothing; in its worst window, ${spc(r.worst_excess)}.`), el('span',{class:'chip '+(r.verdict==='robust edge'?'buy':r.verdict==='no reliable edge'?'warn':'hold')}, r.verdict)); };
+        g.addEventListener('click',pick); g.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); pick(); } }); svg.append(g); });
+      host.append(svg);
+    };
+    box.append(el('p',{class:'small muted'},'Most clever strategies lost to simply holding once tax was counted. Today\'s tax rules are applied to all ten years.'));
+    draws.push(drawE);
   }
-  detail.innerHTML='<span class="muted">Click a marker on the chart.</span>'; draw(); addEventListener('resize',()=>draw());
-})();
+  if (!B && !V) p.append(el('p',{class:'muted'},'Run python main.py site to add the replay, and python main.py validate for the 10-year test.'));
+  redraw.record = () => draws.forEach(f=>f());
+}
 
-/* ---------- 8. ten-year evidence ---------- */
-(function(){
-  const V=D.validation, p=panel('evidence','Does it hold up over 10 years?');
-  if(!V){ p.append(el('div',{class:'pb muted'},'Run `python main.py validate` (about 10 minutes the first time) to add the long-history test.')); return; }
-  p.querySelector('.ph').append(el('span',{class:'hint'},`${V.start} to ${V.end}, lump sum in the Nifty 50 ETF, plus rolling ${V.window_years}-year windows`));
-  const names=V.rows.map(r=>r.name), dates=V.curves.dates, color=n=>PAL[names.indexOf(n)%PAL.length]; let sel=new Set([names[0], D.backtest&&D.backtest.active?D.backtest.active:names[1]]);
-  const chips=el('div',{class:'chips'}), host=el('div',{class:'pb'}); p.append(chips,host);
-  function draw(){ chips.innerHTML=''; names.forEach(n=>chips.append(el('button',{class:'chip','aria-pressed':sel.has(n),type:'button',onclick:()=>{ if(sel.has(n)&&sel.size>1) sel.delete(n); else sel.add(n); draw(); }},el('span',{class:'sw',style:'background:'+color(n)}),n)));
-    lineChart(host,{dates,series:[...sel].map(n=>({name:n,color:color(n),vals:V.curves.series[n].map(v=>v/V.curves.series[n][0]*100),w:n===names[0]?2:1.5,dash:n===names[0]?'5 4':''})),fmt:v=>v.toFixed(0),label:'10-year value, start = 100',every:12}); }
-  draw(); addEventListener('resize',draw);
-  const tone={'robust edge':'buy','promising, not proven':'hold','cuts drawdown at little cost':'hold','no reliable edge':'warn','baseline':'hold'};
-  p.append(el('div',{class:'scroll'}, el('table',{}, el('thead',{}, el('tr',{}, ['Strategy','Yearly return after tax','Worst fall','Beat doing nothing in','Median gap / yr','Worst window','Verdict'].map(h=>el('th',{},h)))),
-    el('tbody',{}, V.rows.map(r=>el('tr',{}, el('td',{},r.name), el('td',{class:'n'},pc(r.cagr_after_tax)), el('td',{class:'n'},pc(r.max_drawdown)), el('td',{class:'n'},r.verdict==='baseline'?'-':pc(r.win_rate,0)+' of '+r.windows), el('td',{class:'n'},r.verdict==='baseline'?'-':spc(r.median_excess)), el('td',{class:'n'},r.verdict==='baseline'?'-':spc(r.worst_excess)), el('td',{}, el('span',{class:'tag '+tone[r.verdict]}, r.verdict.toUpperCase()))))))));
-  p.append(el('div',{class:'fx muted'},'Gap = yearly return minus doing nothing, same window, after fees and Indian capital-gains tax. "Robust" needs wins in 60% or more of windows, a positive median in both the early and late half, and no window worse than -5 points a year. Today\'s tax rules are applied to all years. Strategies added after seeing results were chosen on this same history, so their numbers are optimistic.'));
-})();
+/* ---------- tab: explore markets ---------- */
+function buildExplore(p){
+  p.append(el('div',{class:'block'}, el('h1',{},'What is moving, and what is worth owning'), el('p',{class:'lede'},'First, which assets the momentum rule likes right now. Then a wider set of metals, chip makers and markets, compared after cost and tax.')));
+  const rows=D.cross_sectional_universe; const box=el('div',{class:'panel block'}); p.append(box);
+  box.append(el('h2',{},'Momentum ranking'), el('p',{class:'small muted'},`Score = last year's return, skipping the latest month, divided by its volatility. The engine picks from the top ${P.top_k}. Click a bar for the working.`));
+  const host=el('div'), info=el('div',{class:'event'}); box.append(host, legend([{name:'In the target',color:css('--buy')},{name:'Rising',color:css('--s1')},{name:'Falling',color:css('--s2')}]), info); info.append(el('p',{class:'muted'},'Click a bar.'));
+  const ms=rows.map(r=>r.M).filter(x=>x!=null);
+  function drawM(){
+    host.innerHTML=''; const W=Math.max(host.clientWidth||600,300), rowH=28, lab=Math.min(170,W*.34), H=rows.length*rowH+8; const lo=Math.min(0,...ms), hi=Math.max(0,...ms); const X=v=>lab+(W-lab-52)*(v-lo)/((hi-lo)||1);
+    const svg=sv('svg',{viewBox:`0 0 ${W} ${H}`,width:'100%',height:H,role:'img','aria-label':'Momentum score by asset'});
+    svg.append(sv('line',{x1:X(0),x2:X(0),y1:0,y2:H,stroke:css('--faint')}));
+    rows.forEach((r,k)=>{ const y=k*rowH+2, v=r.M||0, x0=Math.min(X(0),X(v)), w=Math.max(2,Math.abs(X(v)-X(0)));
+      const g=sv('g',{tabindex:0,role:'button','aria-label':`${r.symbol} score ${v.toFixed(2)}`,style:'cursor:pointer'});
+      g.append(sv('rect',{x:0,y,width:W,height:rowH,fill:'transparent'}), sv('text',{x:lab-10,y:y+16,'text-anchor':'end','font-size':13,'font-weight':r.in_target?700:400,fill:css('--ink')}, r.symbol + (r.held?' (yours)':'')), sv('rect',{x:x0,y:y+5,width:w,height:16,rx:3,fill:r.in_target?css('--buy'):v>=0?css('--s1'):css('--s2'),'fill-opacity':r.in_target?1:.5}),
+        sv('text',{x:v>=0?X(v)+6:X(0)+6,y:y+17,'font-size':12,fill:css('--muted')}, v.toFixed(2)));
+      const pick=()=>{ info.innerHTML=''; info.append(el('h3',{}, `${r.symbol}: ${r.name}`), el('p',{class:'muted'}, `Return ${spc(r.R)} with ${pc(r.sigma)} volatility gives a score of ${(r.M||0).toFixed(2)}, which is ${Math.abs(r.z||0).toFixed(2)} standard deviations ${(r.z||0)>=0?'above':'below'} the average of this list. ${r.in_target?'It is in the engine\'s target.':'It is not in the target.'} ${r.region==='US'?'US-listed, bought through LRS.':'Listed in India.'}`)); };
+      g.addEventListener('click',pick); g.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); pick(); } }); svg.append(g); });
+    host.append(svg);
+  }
+  const U=D.universe||[]; const ub=el('div',{class:'panel block'}); p.append(ub);
+  ub.append(el('h2',{},'Metals, chips and markets: return against risk'), el('p',{class:'small muted'},'Each dot is one asset. Further right is bumpier; higher is better: what Rs 1 lakh earned per year over 5 years after costs, currency conversion and tax. Past booms are hindsight.'));
+  if (!U.length){ ub.append(el('p',{class:'muted'},'Not loaded. Run python main.py site with an internet connection.')); redraw.markets=drawM; return; }
+  const themes=['All',...new Set(U.map(r=>r.theme))]; let theme='All';
+  const pk=el('div',{class:'pick',role:'group','aria-label':'Theme'}), sh=el('div'), si=el('div',{class:'event'});
+  ub.append(pk, sh, legend([{name:'Listed in India',color:css('--s1')},{name:'US-listed, via LRS',color:css('--s2')}]), si);
+  si.append(el('p',{class:'muted'},'Hover or tap a dot.'));
+  themes.forEach(t=>pk.append(el('button',{type:'button','aria-pressed':String(t===theme),onclick:()=>{ theme=t; pk.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.textContent===t))); drawU(); }}, t)));
+  function drawU(){
+    sh.innerHTML=''; const pts=U.filter(r=>r.after_tax_5y!=null); const W=Math.max(sh.clientWidth||600,300), H=Math.min(400, Math.max(300, W*.55)), m={l:52,r:24,t:16,b:44};
+    const xm=Math.max(...pts.map(r=>r.vol))*1.1, ylo=Math.min(0,...pts.map(r=>r.after_tax_5y))-0.03, yhi=Math.max(...pts.map(r=>r.after_tax_5y))+0.05;
+    const X=v=>m.l+(W-m.l-m.r)*v/xm, Y=v=>m.t+(H-m.t-m.b)*(1-(v-ylo)/(yhi-ylo));
+    const svg=sv('svg',{viewBox:`0 0 ${W} ${H}`,width:'100%',height:H,role:'img','aria-label':'Return after tax against volatility'});
+    for (let k=0;k<=4;k++){ const v=ylo+(yhi-ylo)*k/4; svg.append(sv('line',{x1:m.l,x2:W-m.r,y1:Y(v),y2:Y(v),stroke:css('--line')}), sv('text',{x:m.l-8,y:Y(v)+4,'text-anchor':'end','font-size':12,fill:css('--muted')},pc(v,0))); }
+    for (let k=0;k<=4;k++){ const v=xm*k/4; svg.append(sv('text',{x:X(v),y:H-24,'text-anchor':'middle','font-size':12,fill:css('--muted')},pc(v,0))); }
+    svg.append(sv('text',{x:(W+m.l)/2,y:H-4,'text-anchor':'middle','font-size':12,fill:css('--muted')},'Volatility: how bumpy, per year'));
+    const nifty=pts.find(r=>r.symbol==='NIFTYBEES'); if (nifty) svg.append(sv('line',{x1:m.l,x2:W-m.r,y1:Y(nifty.after_tax_5y),y2:Y(nifty.after_tax_5y),stroke:css('--faint'),'stroke-dasharray':'4 4'}), sv('text',{x:W-m.r,y:Y(nifty.after_tax_5y)-6,'text-anchor':'end','font-size':12,fill:css('--muted')},'Nifty 50 level'));
+    const order=[...pts].sort((a,b)=>(theme==='All'||a.theme===theme?1:0)-(theme==='All'||b.theme===theme?1:0));
+    const labelled=new Set(['NIFTYBEES','GOLDBEES','SMH','NVDA','SPY','SLV','HINDCOPPER','COPX','QQQ']);
+    order.forEach(r=>{ const on=theme==='All'||r.theme===theme; const c=r.where==='US'?css('--s2'):css('--s1');
+      const g=sv('g',{tabindex:on?0:-1,role:'button','aria-label':`${r.symbol}: ${spc(r.after_tax_5y)} a year after tax, ${pc(r.vol,0)} volatility`,style:'cursor:pointer'});
+      g.append(sv('circle',{cx:X(r.vol),cy:Y(r.after_tax_5y),r:14,fill:'transparent'}), sv('circle',{cx:X(r.vol),cy:Y(r.after_tax_5y),r:on?6:4,fill:on?c:css('--line'),stroke:css('--surface'),'stroke-width':2}));
+      if (on && (theme!=='All' || labelled.has(r.symbol))) g.append(sv('text',{x:X(r.vol)+9,y:Y(r.after_tax_5y)+4,'font-size':12,fill:css('--ink')},r.symbol));
+      const sh2=e=>{ showTip(e, `<b>${r.symbol}</b> ${r.name}<br>5 years after tax: ${spc(r.after_tax_5y)} a year<br>Volatility ${pc(r.vol,0)}, worst fall ${pc(r.max_dd_5y,0)}`); si.innerHTML=''; si.append(el('h3',{},`${r.symbol}: ${r.name}`), el('p',{class:'muted'}, `${r.theme}. 1 year ${spc(r.r1)}; per year over 3 years ${spc(r.r3)}, 5 years ${spc(r.r5)}, 10 years ${spc(r.r10)}. Moves with the Nifty: ${r.corr_nifty==null?'n/a':r.corr_nifty.toFixed(2)}, where 1 is in lockstep and 0 is unrelated. How to buy: ${r.how}.`)); };
+      g.addEventListener('pointermove',sh2); g.addEventListener('pointerleave',hideTip); g.addEventListener('click',sh2); g.addEventListener('focus',()=>{ const b=g.getBoundingClientRect(); sh2({clientX:b.x+b.width/2,clientY:b.y}); }); g.addEventListener('blur',hideTip);
+      svg.append(g); });
+    sh.append(svg);
+  }
+  ub.append(el('details',{}, el('summary',{},'Show all numbers'), el('div',{class:'scroll'}, el('table',{}, el('thead',{}, el('tr',{}, ['Asset','Where','1y','3y','5y','10y','5y after tax','Volatility','Worst fall'].map(h=>el('th',{},h)))), el('tbody',{}, [...U].sort((a,b)=>(b.after_tax_5y==null?-9:b.after_tax_5y)-(a.after_tax_5y==null?-9:a.after_tax_5y)).map(r=>el('tr',{}, el('td',{}, el('b',{},r.symbol),' ',el('span',{class:'muted small'},r.theme)), el('td',{},r.where), ...['r1','r3','r5','r10','after_tax_5y'].map(k=>el('td',{class:r[k]>0?'buy':r[k]<0?'sell':''},spc(r[k]))), el('td',{},pc(r.vol,0)), el('td',{},pc(r.max_dd_5y,0)))))))),
+    el('p',{class:'small muted'},'India has no pure chip ETF; the Indian routes are electronics makers or a global tech fund. Platinum, copper and rare earths are only available through US-listed funds.'));
+  redraw.markets = () => { drawM(); drawU(); };
+}
 
-/* ---------- 9. wider universe ---------- */
-(function(){
-  const U=D.universe, p=panel('universe','Wider universe: metals, semiconductors, India and abroad','rupee returns per year; 5y after tax = Rs 1 lakh held 5 years, after costs, FX and tax');
-  if(!U||!U.length){ p.append(el('div',{class:'pb muted'},'Run `python main.py site` with a connection to include it.')); return; }
-  const themes=['All',...new Set(U.map(r=>r.theme))]; let th='All', where='All', sortKey='after_tax_5y'; const chips=el('div',{class:'chips'}), tb=el('div',{class:'scroll'}); p.append(chips,tb);
-  const maxA=Math.max(0.01,...U.map(r=>Math.abs(r.after_tax_5y||0)));
-  function draw(){ chips.innerHTML=''; themes.forEach(t=>chips.append(el('button',{class:'chip',type:'button','aria-pressed':th===t,onclick:()=>{th=t;draw();}},t))); ['All','India','US'].forEach(w=>chips.append(el('button',{class:'chip',type:'button','aria-pressed':where===w,onclick:()=>{where=w;draw();}},w==='All'?'Anywhere':w==='India'?'India-listed':'US-listed (LRS)')));
-    const rows=U.filter(r=>(th==='All'||r.theme===th)&&(where==='All'||r.where===where)).sort((a,b)=>(b[sortKey]??-9)-(a[sortKey]??-9)); const H=[['symbol','Instrument'],['r1','1y'],['r3','3y'],['r5','5y'],['r10','10y'],['after_tax_5y','5y after tax'],['vol','Vol'],['max_dd_5y','Worst fall'],['corr_nifty','vs Nifty']];
-    tb.innerHTML=''; tb.append(el('table',{}, el('thead',{}, el('tr',{}, H.map(([k,l])=>el('th',{},el('button',{class:'thbtn',type:'button',onclick:()=>{sortKey=k;draw();}},l+(sortKey===k?' v':'')))), el('th',{class:'l'},'How to buy'))),
-      el('tbody',{}, rows.map(r=>el('tr',{}, el('td',{}, el('b',{},r.symbol),' ',el('span',{class:'muted'},r.where+(r.single_stock?', single stock':''))), ...['r1','r3','r5','r10'].map(k=>el('td',{class:'n '+cls(r[k])},spc(r[k]))),
-        el('td',{class:'n '+cls(r.after_tax_5y)}, el('span',{style:`display:inline-block;height:6px;margin-right:6px;width:${Math.round(Math.abs(r.after_tax_5y||0)/maxA*50)}px;background:var(--${(r.after_tax_5y||0)>=0?'buy':'sell'})`}), spc(r.after_tax_5y)), el('td',{class:'n'},pc(r.vol,0)), el('td',{class:'n'},pc(r.max_dd_5y,0)), el('td',{class:'n'},r.corr_nifty==null?'-':r.corr_nifty.toFixed(2)), el('td',{class:'wrap muted'},r.how)))))); }
-  draw(); p.append(el('div',{class:'fx muted'},'India has no pure semiconductor ETF: Indian routes are electronics makers (Dixon, Kaynes) or a global tech ETF; real chip exposure is US-listed ETFs via LRS. No India-listed platinum, copper or rare-earth ETFs exist. Past booms are hindsight; the 10-year test above says whether rotating into them paid. Short-history funds show dashes.'));
-})();
+/* ---------- tab: method ---------- */
+function buildMethod(p){
+  p.append(el('div',{class:'block'}, el('h1',{},'How the engine decides'), el('p',{class:'lede'},`It checks the market trend, ranks assets by momentum, builds a target mix with the ${D.policy.replace(/_/g,' ')} strategy, then trades only where the expected gain beats fees and tax.`)));
+  const box=el('div',{class:'panel block'}); p.append(box); box.append(el('h2',{},'The formulas'));
+  box.append(el('div',{}, ['regime','R','sigma','M','z','rule'].map(k=>el('div',{class:'formula'}, el('div',{class:'tex','data-f':k}), el('p',{class:'small muted'},F[k].say)))));
+  box.append(el('p',{class:'small muted'}, `Settings: lookback ${P.lookback} trading days, skip ${P.skip}, top ${P.top_k} picks, 200-day trend average, drift threshold ${pc(theta,1)}, checks ${P.check_frequency}. Change them in config/settings.yaml.`));
+  const inp=el('div',{class:'panel block'}); p.append(inp); inp.append(el('h2',{},'Everything it weighed today'));
+  const tone={ok:['Fine','hold'],warn:['Watch','warn'],bad:['Pushes to act','sell'],info:['Info','hold']};
+  inp.append(el('div',{class:'two'}, D.factors.map(f=>el('div',{class:'block',style:'gap:4px'}, el('div',{style:'display:flex;gap:8px;align-items:center;flex-wrap:wrap'}, el('h3',{style:'margin:0'},f.name), el('span',{class:'chip '+tone[f.status][1]}, tone[f.status][0])), el('p',{},f.line), el('details',{style:'border:0;padding:0'}, el('summary',{},'More'), el('p',{class:'small muted'},f.detail))))));
+  if (D.holdings.length) p.append(el('details',{class:'panel'}, el('summary',{},'Your tax lots'), el('div',{class:'scroll'}, el('table',{}, el('thead',{}, el('tr',{}, ['Holding','Bought','Units','Cost','Value','Gain','Tax status'].map(h=>el('th',{},h)))), el('tbody',{}, D.holdings.map(h=>el('tr',{}, el('td',{},h.symbol), el('td',{},h.buy_date), el('td',{},num(h.qty,2)), el('td',{},rs(h.cost)), el('td',{},rs(h.value)), el('td',{class:h.gain>=0?'buy':'sell'},rs(h.gain)), el('td',{},h.term))))))));
+  if (D.notes.length) p.append(el('div',{class:'block'}, el('h2',{},'Also worth knowing'), el('ul',{class:'reasons'}, D.notes.map(n=>el('li',{},n)))));
+  p.append(el('footer',{},'Decision support only, not investment, legal or tax advice. Tax rules follow the Finance Acts as understood when this was built; confirm with a CA. Past results, including the 10-year test, do not guarantee future returns.'));
+}
 
-/* ---------- 10. steps ---------- */
-(function(){
-  const p=panel('steps','Steps',D.verdict.call==='HOLD'?'no trades recommended; follow only if you decide to act':'tick as you go; progress is saved in this browser');
-  const key='steps-'+D.asof; let saved={}; try{ saved=JSON.parse(localStorage.getItem(key)||'{}'); }catch(e){}
-  const bar=el('div',{class:'bar',style:'margin:8px 12px 0'},el('i')), cnt=el('div',{class:'muted',style:'padding:4px 12px;font-size:12px'}); p.append(bar,cnt); const ol=el('ol',{class:'steps'}); p.append(ol);
-  const upd=()=>{ const n=D.steps.length,d=Object.values(saved).filter(Boolean).length; bar.firstChild.style.width=(d/n*100)+'%'; cnt.textContent=`${d} of ${n} done`; };
-  D.steps.forEach((st,i)=>{ const id='st'+i, cb=el('input',{type:'checkbox',id}); cb.checked=!!saved[i];
-    const li=el('li',{class:saved[i]?'done':''}, cb, el('div',{}, el('label',{for:id},`${i+1}. ${st.title}`), el('div',{class:'d'},st.detail), st.cmd?el('div',{class:'d mono'},st.cmd):'', (st.why&&st.why.length)?el('details',{},el('summary',{},'Why this trade'),el('div',{class:'d'},st.why.join(' '))):''));
-    cb.addEventListener('change',()=>{ saved[i]=cb.checked; li.classList.toggle('done',cb.checked); try{localStorage.setItem(key,JSON.stringify(saved));}catch(e){} upd(); }); ol.append(li); });
-  upd();
-})();
-
-$('#foot').textContent='Decision support only. Not investment, legal or tax advice. Tax rules are modelled from the Finance Acts as understood at build time; confirm with a CA. Past results, including the 10-year test, do not guarantee future returns.';
-texAll();
+/* ---------- start ---------- */
+let first=(location.hash||'').slice(1); if (!TABS.find(t=>t.id===first)) first=store('tab')||'decision';
+show(first, false);
 </script>
-</body>
-</html>

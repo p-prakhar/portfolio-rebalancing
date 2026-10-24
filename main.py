@@ -155,13 +155,14 @@ def cmd_site(args):
     settings = load_settings()
     if args.policy:
         settings.strategy["policy"] = args.policy
-    h = load_holdings(args.holdings)
+    example = getattr(args, "example", False)
+    h = load_holdings(ROOT / "config" / "holdings.example.yaml" if example else args.holdings)
     register_assets(settings, h)
     px, vix, fx, note = load_data(settings, args.demo, args.refresh)
     h = resolve_amount_lots(h, px)
     usd = float(fx.iloc[-1]) if fx is not None else None
     plan = make_plan(px.index[-1], h.lots, h.cash_inr, px, vix, settings, _fy_realised(h), lrs_used=h.lrs_remitted_this_fy_inr, usd_inr=usd)
-    timing = timing_step(plan, px, settings) if not args.demo else []
+    timing = timing_step(plan, px, settings) if not (args.demo or example) else []
     start = px.index[-1] - timedelta(days=args.days)
     curves, table, logs = run_all(h.lots, px, vix, settings, start, fx)
     vpath = ROOT / "reports" / "validation.json"
@@ -174,8 +175,10 @@ def cmd_site(args):
             universe = uc.compare(lpx, ls, usd)
         except Exception as exc:    # the page still works without the wider-universe table
             logging.warning("wider universe skipped: %s", exc)
-    data = site.build(plan, settings, timing, px, (curves, table, logs, start), load_profile(), load_other(), validation, note, usd, universe)
-    out = site.render(data, ROOT / settings["report"]["out_dir"] / "index.html")
+    data = site.build(plan, settings, timing, px, (curves, table, logs, start), None if example else load_profile(),
+                      [] if example else load_other(), validation, note, usd, universe)
+    data["example"] = example
+    out = site.render(data, ROOT / settings["report"]["out_dir"] / ("example.html" if example else "index.html"))
     print(f"Decision: {data['verdict']['call']} - {data['verdict']['headline']}\nSaved {out}")
     return out
 
@@ -220,6 +223,7 @@ def main():
     sp.add_argument("--demo", action="store_true"); sp.add_argument("--refresh", action="store_true")
     sp.add_argument("--holdings"); sp.add_argument("--policy"); sp.add_argument("--days", type=int, default=365)
     sp.add_argument("--open", action="store_true", help="open the page in your browser")
+    sp.add_argument("--example", action="store_true", help="build reports/example.html from the made-up example holdings (safe to share)")
     vp = sub.add_parser("validate", help="10-year rolling-window robustness test of every strategy (slow the first time)")
     vp.add_argument("--years", type=int, default=10); vp.add_argument("--window-years", type=int, default=3); vp.add_argument("--refresh", action="store_true")
     sub.add_parser("compare", help="compare metals, semiconductors and other assets in India and abroad, after cost and tax")

@@ -17,8 +17,8 @@ Decision support for an Indian resident's taxable portfolio (India and US assets
 - Yahoo data has glitches; `pe/data.py` drops isolated bad prints. Wrap yfinance calls in `pe.quiet()`.
 
 ## Report UI (`pe/site_template.html`, one offline HTML file; data embedded as JSON by `pe/site.py`)
-- Order: regime bar, decision, order blotter with theta slider, factor matrix, then supporting sections.
-- Tokens: light canvas #f8fafc, dark #09090b; borders #e2e8f0 / #27272a, 1px; BUY #059669, SELL #e11d48, primary #0f172a. Geist for copy, Geist Mono for numbers, tabular figures everywhere. Padding 8 to 12px, dense tables, divide-y rows.
-- Not allowed: gradients, glows, blur, heavy shadows, nested cards, rounded-2xl wrappers, hero or marketing copy, em-dashes in UI copy, status dots, raw JSON. Minimal motion.
+- Six tabs, each answering one question: Should I rebalance?, The plan (flow + drift slider), Steps, Track record, Explore markets, How it decides. One main chart per view; details behind disclosure.
+- Tokens live in the :root block at the top of the template (light and dark). BUY and SELL keep their own green and red; charts use the categorical series tokens in fixed order.
+- Keep views light: progressive disclosure over dense tables, generous spacing, no em-dashes in UI copy, no gradients or glows.
 - Formulas render with KaTeX from a CDN when online and fall back to monospace text offline.
-- Check at 1440px and 768px widths after any layout change.
+- Check desktop, tablet and 375px phone widths after any layout change; `python main.py site --example` builds a shareable page from made-up holdings.
