@@ -24,8 +24,12 @@ def _one(job: tuple) -> dict:
     warnings.filterwarnings("ignore")
     from .backtest import metrics, run_variant
     from .validate import load_long
-    years, label, policy, freq = job
+    years, label, policy, freq, universe = job
     s, px, vix, closes = load_long(10)
+    if universe == "full":       # every instrument with prices may be picked, including single stocks
+        for a in s.assets.values():
+            if a.symbol != "CASH":
+                a.rotate = True
     fx = closes[s["data"]["fx_ticker"]].reindex(px.index).ffill() if s["data"]["fx_ticker"] in closes else None
     end = px.index[-1]
     start = px.index[px.index >= end - pd.DateOffset(years=years)][0]
@@ -41,7 +45,9 @@ def _one(job: tuple) -> dict:
     after = m["after_tax_return_liquidated"]
     trades = [e for e in book.log if e[1] in ("BUY", "SELL")]
     decisions = [e for e in book.log if e[1] == "PLAN"]
-    return {"years": years, "label": label, "policy": policy, "check": freq, "start": str(start.date()), "end": str(end.date()),
+    fills = [{"date": str(d), "side": k.lower(), "text": msg} for d, k, msg in book.log if k in ("BUY", "SELL", "TAX")]
+    return {"years": years, "label": label, "policy": policy, "check": freq, "universe": universe, "journal": book.journal if freq == "daily" else [],
+            "fills": fills if freq == "daily" else [], "start": str(start.date()), "end": str(end.date()),
             "final_value_after_tax": float(nav.iloc[-1] - liq), "cagr_after_tax": (1 + after) ** (1 / yrs) - 1 if after > -1 else None,
             "return_after_tax": after, "max_drawdown": m["max_drawdown"], "volatility": m["volatility"],
             "taxes_paid": m["taxes_paid"] + liq, "costs": m["costs"], "fills": len(trades), "decisions": len(decisions),
@@ -54,9 +60,11 @@ def simulate(horizons=(10, 5, 2), policy: str | None = None, workers: int = 6) -
     pol = policy or load_settings().strategy["policy"]
     jobs = []
     for y in horizons:
-        jobs += [(y, "Just hold the Nifty ETFs", "buy_hold", "monthly"),
-                 (y, f"Follow the engine daily ({pol})", pol, "daily"),
-                 (y, f"Follow the engine monthly ({pol})", pol, "monthly")]
+        jobs += [(y, "Just hold the Nifty ETFs", "buy_hold", "monthly", "core"),
+                 (y, "Follow daily, core universe", pol, "daily", "core"),
+                 (y, "Follow monthly, core universe", pol, "monthly", "core"),
+                 (y, "Follow daily, full universe", pol, "daily", "full"),
+                 (y, "Follow monthly, full universe", pol, "monthly", "full")]
     with ProcessPoolExecutor(workers) as ex:
         res = list(ex.map(_one, jobs))
     out = {"policy": pol, "lump": LUMP, "run_on": str(date.today()), "results": res}
@@ -70,7 +78,9 @@ def report(out: dict) -> str:
     L = ["# If you had followed the engine every day", "",
          f"Start: Rs {out['lump']:,.0f} split between NIFTYBEES and SETFNIF50. The engine ({out['policy']}) runs each day on data up to that day, "
          "and every order it gives is followed, with costs, Indian capital-gains tax paid each April, and tax on everything still held as if sold "
-         "on the last day. Today's tax rules apply throughout.", ""]
+         "on the last day. Today's tax rules apply throughout.",
+         "", "Core universe: the hand-picked ETF list the rotation normally uses. Full universe: every instrument with price data "
+         "(metals, semiconductors, single stocks included); an instrument becomes eligible once it has about 13 months of history.", ""]
     for y in sorted({r["years"] for r in out["results"]}, reverse=True):
         rows = [r for r in out["results"] if r["years"] == y]
         base = next(r for r in rows if r["policy"] == "buy_hold")
@@ -78,8 +88,16 @@ def report(out: dict) -> str:
               "| approach | value after tax | per year after tax | worst fall | tax paid | fees | days with trades |", "|---|---|---|---|---|---|---|"]
         for r in rows:
             L.append(f"| {r['label']} | Rs {r['final_value_after_tax']:,.0f} | {r['cagr_after_tax']:.1%} | {r['max_drawdown']:.1%} | Rs {r['taxes_paid']:,.0f} | Rs {r['costs']:,.0f} | {r['trade_days']} |")
-        d = next(r for r in rows if r["check"] == "daily")
+        d = next(r for r in rows if r["check"] == "daily" and r["universe"] == "core")
         gap = d["cagr_after_tax"] - base["cagr_after_tax"]
         L += ["", f"Following it daily {'beat' if gap > 0 else 'trailed'} just holding by {abs(gap) * 100:.1f} points a year after tax, "
                   f"ending Rs {d['final_value_after_tax'] - base['final_value_after_tax']:+,.0f} {'ahead' if gap > 0 else 'behind'}.", ""]
+    for r in out["results"]:
+        if r["check"] != "daily" or not r["journal"] or r["years"] != min(x["years"] for x in out["results"]):
+            continue
+        L += [f"## Decision timeline: {r['label']}, last {r['years']} years", ""]
+        for e in r["journal"]:
+            acts = ", ".join(f"{t['side']} {t['symbol']} Rs {t['value']:,.0f}" for t in e["trades"])
+            L.append(f"- **{e['date']}** ({e['regime'].replace('_', '-')}): {acts}. {e['trades'][0]['why'][0] if e['trades'][0]['why'] else ''}")
+        L.append("")
     return "\n".join(L)

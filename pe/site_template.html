@@ -381,21 +381,51 @@ function buildReplay(p){
   if (S){
     const box=el('div',{class:'panel block'}); p.insertBefore(box, p.children[1]);
     const hz=[...new Set(S.results.map(r=>r.years))].sort((a,b)=>b-a); let h=hz[0];
-    box.append(el('h2',{},'If you had run it every day and followed every order'), el('p',{class:'small muted'},`Start: ${lakh(S.lump)} split between the two Nifty 50 ETFs. Each day the engine saw only prices up to that day; every order was followed, with fees and tax paid each April. Values are after tax on whatever was still held at the end.`));
-    const pk=el('div',{class:'pick',role:'group','aria-label':'Period'}), host=el('div'), lg=el('div'), st=el('div',{class:'stats'}), say=el('p',{style:'font-weight:500'});
-    hz.forEach(y=>pk.append(el('button',{type:'button','aria-pressed':String(y===h),onclick:()=>{ h=y; pk.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.y==String(y)))); drawS(); },'data-y':String(y)}, `Last ${y} years`)));
-    box.append(pk, say, host, lg, st, el('p',{class:'small muted'},`Caution: the ${S.policy.replace(/_/g,' ')} strategy was chosen after looking at this same history, so these results flatter it. Treat the gap as an upper estimate.`));
-    const COL={buy_hold:'--faint',daily:'--s1',monthly:'--s2'};
-    const drawS=()=>{
-      const rows=S.results.filter(r=>r.years===h), base=rows.find(r=>r.policy==='buy_hold'), d=rows.find(r=>r.check==='daily');
-      const gap=d.cagr_after_tax-base.cagr_after_tax;
-      say.textContent=`Over the last ${h} years, following it daily ${gap>0?'beat':'trailed'} just holding by ${Math.abs(gap*100).toFixed(1)} points a year after tax: ${lakh(d.final_value_after_tax)} against ${lakh(base.final_value_after_tax)}.`;
-      const key=r=>r.policy==='buy_hold'?'buy_hold':r.check;
-      lineChart(host,{dates:base.curve.dates,series:rows.map(r=>({name:r.label,short:r.policy==='buy_hold'?'Hold':r.check==='daily'?'Daily':'Monthly',color:css(COL[key(r)]),vals:r.curve.values.map(v=>v/S.lump*100),dash:r.policy==='buy_hold'?'6 4':null,w:r.check==='daily'?2.5:1.8})),fmt:v=>v.toFixed(0),label:'Value of the portfolio, start = 100',endLabels:true,height:300});
-      lg.innerHTML=''; lg.append(legend(rows.map(r=>({name:r.label,color:css(COL[key(r)]),dash:r.policy==='buy_hold'}))));
-      st.innerHTML=''; rows.forEach(r=>st.append(el('div',{class:'stat'}, el('small',{},r.label), el('b',{},`${pc(r.cagr_after_tax)} a year`), el('div',{class:'small muted'},`Worst fall ${pc(r.max_drawdown)}. Tax ${lakh(r.taxes_paid)}, fees ${lakh(r.costs)}. Traded on ${r.trade_days} days.`))));
-    };
-    draws.push(drawS);
+    const key=r=>r.policy==='buy_hold'?'hold':`${r.check}-${r.universe}`;
+    const COL={'hold':'--faint','daily-core':'--s1','monthly-core':'--s3','daily-full':'--s2','monthly-full':'--s4'};
+    let shown=new Set(['hold','daily-core','daily-full']); let focus='daily-core';
+    box.append(el('h2',{},'If you had run it every day and followed every order'), el('p',{class:'small muted'},`Start: ${lakh(S.lump)} split between the two Nifty 50 ETFs. Each day the engine saw only prices up to that day; every order was followed, with fees and tax paid each April. Values are after tax on whatever was still held at the end. Core universe is the usual ETF list; full universe lets it pick anything with prices, including metals, chip makers and single stocks.`));
+    const pk=el('div',{class:'pick',role:'group','aria-label':'Period'}), ap=el('div',{class:'pick',role:'group','aria-label':'Approaches shown'}), host=el('div'), st=el('div',{class:'stats'}), say=el('p',{style:'font-weight:500'});
+    hz.forEach(y=>pk.append(el('button',{type:'button','aria-pressed':String(y===h),'data-y':String(y),onclick:()=>{ h=y; pk.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.y==String(y)))); drawS(); drawT(); }}, `Last ${y} years`)));
+    box.append(pk, say, ap, host, st, el('p',{class:'small muted'},`Caution: the ${S.policy.replace(/_/g,' ')} strategy was chosen after looking at this same history, and the full universe was assembled in 2026 from assets we know did well, such as NVIDIA. Both flatter the results. Treat the gaps as upper estimates.`));
+    // timeline
+    const tl=el('div',{class:'panel block'}); p.insertBefore(tl, box.nextSibling);
+    const tsel=el('div',{class:'pick',role:'group','aria-label':'Whose decisions'}), tlist=el('div');
+    tl.append(el('h2',{},'Decision timeline'), el('p',{class:'small muted'},'Every day the engine ordered trades, with the market reading and the reasons it gave that day. Click a dot on the chart above to jump to that day.'), tsel, tlist);
+    let tfocus='daily-core';
+    [['daily-core','Daily, core universe'],['daily-full','Daily, full universe']].forEach(([k,l])=>tsel.append(el('button',{type:'button','aria-pressed':String(k===tfocus),'data-k':k,onclick:()=>{ tfocus=k; tsel.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.k===k))); drawT(); drawS(); }}, l)));
+    const rowsFor=()=>S.results.filter(r=>r.years===h);
+    function drawS(){
+      const rows=rowsFor(), base=rows.find(r=>r.policy==='buy_hold'), d=rows.find(r=>key(r)==='daily-core'), f=rows.find(r=>key(r)==='daily-full');
+      const g1=d.cagr_after_tax-base.cagr_after_tax, g2=f?f.cagr_after_tax-base.cagr_after_tax:null;
+      say.textContent=`Over the last ${h} years, following it daily ${g1>0?'beat':'trailed'} just holding by ${Math.abs(g1*100).toFixed(1)} points a year after tax with the core universe`+(f?`, and ${g2>0?'beat':'trailed'} it by ${Math.abs(g2*100).toFixed(1)} points with the full universe.`:'.');
+      ap.innerHTML=''; rows.forEach(r=>{ const k=key(r); ap.append(el('button',{type:'button','aria-pressed':String(shown.has(k)),onclick:()=>{ if(shown.has(k)&&shown.size>1) shown.delete(k); else shown.add(k); drawS(); }}, el('span',{class:'key',style:`background:${css(COL[k])}`}), r.label)); });
+      const vis=rows.filter(r=>shown.has(key(r)));
+      const jr=rows.find(r=>key(r)===tfocus); const idx=Object.fromEntries(base.curve.dates.map((x,i)=>[x,i]));
+      const near=dt=>{ if (idx[dt]!=null) return idx[dt]; let best=0; base.curve.dates.forEach((x,i)=>{ if (x<=dt) best=i; }); return best; };
+      const mk=(jr&&shown.has(tfocus)?jr.journal:[]).map((e,j)=>{ const i=near(e.date); const buys=e.trades.filter(t=>t.side==='buy').length, sells=e.trades.length-buys; return {i, y:jr.curve.values[i]/S.lump*100, r:4, color: sells&&!buys?css('--sell'):buys&&!sells?css('--buy'):css('--warn'), label:`<b>${e.date}</b><br>${e.trades.map(t=>`${t.side==='buy'?'Buy':'Sell'} ${t.symbol}`).join(', ')}`, click:()=>openEntry(j)}; });
+      lineChart(host,{dates:base.curve.dates,series:vis.map(r=>({name:r.label,short:r.policy==='buy_hold'?'Hold':(r.check==='daily'?'Daily':'Monthly')+(r.universe==='full'?' full':''),color:css(COL[key(r)]),vals:r.curve.values.map(v=>v/S.lump*100),dash:r.policy==='buy_hold'?'6 4':null,w:r.check==='daily'?2.4:1.6})),markers:mk,fmt:v=>v.toFixed(0),label:'Value of the portfolio, start = 100',endLabels:true,height:320});
+      st.innerHTML=''; vis.forEach(r=>st.append(el('div',{class:'stat'}, el('small',{},r.label), el('b',{},`${pc(r.cagr_after_tax)} a year`), el('div',{class:'small muted'},`Ends at ${lakh(r.final_value_after_tax)}. Worst fall ${pc(r.max_drawdown)}. Tax ${lakh(r.taxes_paid)}, fees ${lakh(r.costs)}. Traded on ${r.trade_days} days.`))));
+    }
+    const entries=[];
+    function drawT(){
+      tlist.innerHTML=''; entries.length=0; const r=rowsFor().find(x=>key(x)===tfocus); if (!r||!r.journal.length){ tlist.append(el('p',{class:'muted'},'No decisions recorded for this run.')); return; }
+      let month='';
+      r.journal.forEach((e,j)=>{
+        const m=e.date.slice(0,7); if (m!==month){ month=m; tlist.append(el('h3',{style:'margin:18px 0 4px;color:var(--muted);font-weight:500'}, new Date(e.date+'T00:00:00').toLocaleString('en-IN',{month:'long',year:'numeric'}))); }
+        const reg={calm:['Calm market','buy'],caution:['Caution','warn'],risk_off:['Risk off','sell']}[e.regime]||[e.regime||'n/a','hold'];
+        const summary=e.trades.filter(t=>!t.kind.startsWith('harvest')||t.side==='sell').map(t=>`${t.side==='buy'?'Buy':'Sell'} ${t.symbol} ${lakh(t.value)}`).join(', ');
+        const d=el('details',{style:'border-top:1px solid var(--line);padding:10px 0'},
+          el('summary',{style:'color:var(--ink);font-weight:500;gap:10px;flex-wrap:wrap;align-items:baseline'}, el('span',{style:'min-width:92px'},e.date), el('span',{class:'chip '+reg[1]},reg[0]), el('span',{style:'font-weight:400'},summary)),
+          el('div',{class:'block',style:'gap:8px;padding:8px 0 4px 4px'},
+            el('p',{class:'small muted'}, `Portfolio ${lakh(e.nav)}. Market: ${e.regime_why}`),
+            e.strategy_why.length?el('p',{class:'small'}, e.strategy_why.join(' ')):null,
+            el('ul',{class:'reasons small'}, e.trades.map(t=>el('li',{}, el('b',{},`${t.side==='buy'?'Buy':'Sell'} ${t.symbol}, ${rs(t.value)} (${t.kind.replace(/_/g,' ')}). `), t.why.join(' '), t.tax||t.cost?` Fees ${rs(t.cost)}${t.tax?`, tax ${rs(t.tax)}`:''}.`:''))),
+            el('p',{class:'small muted'}, 'Target after this decision: '+Object.entries(e.target).map(([k,v])=>`${k} ${pc(v,0)}`).join(', '))));
+        entries.push(d); tlist.append(d); });
+    }
+    function openEntry(j){ const d=entries[j]; if(!d) return; d.open=true; d.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center'}); d.querySelector('summary').focus({preventScroll:true}); }
+    drawT(); draws.push(drawS);
   }
   if (!B && !V && !S) p.append(el('p',{class:'muted'},'Run python main.py site to add the replay, and python main.py validate for the 10-year test.'));
   redraw.record = () => draws.forEach(f=>f());

@@ -58,6 +58,7 @@ class Book:
     costs_paid: float = 0.0
     turnover: float = 0.0
     log: list = field(default_factory=list)
+    journal: list = field(default_factory=list)    # one entry per day the planner ordered trades: what, and why
 
 
 def _sell(book: Book, settings: Settings, t: Trade, frac: float, price: float, day: date, usd_inr):
@@ -163,6 +164,15 @@ def run_variant(name, policy, execution, harvest, init_lots, px, vix, settings: 
                     (t.kind == "risk_exit" and tm["regime_override_secretary"])
                 pending.append(Leg(t, "immediate" if immediate else execution, 1 if immediate else tm["window_days"]))
                 book.log.append((day, "PLAN", f"{t.side} {t.symbol} Rs {t.value:,.0f} [{t.kind}] - {t.why[0] if t.why else ''}"))
+            if plan.trades:
+                reg = plan.target.regime or {}
+                tw = plan.target.weights or {}
+                book.journal.append({
+                    "date": str(day), "nav": round(_nav(book, row)), "regime": reg.get("label", ""),
+                    "regime_why": " ".join(reg.get("why", [])), "target": {k: round(v, 4) for k, v in sorted(tw.items(), key=lambda kv: -kv[1]) if v > 0.004},
+                    "strategy_why": [w for w in plan.target.why[1:]][:4],
+                    "trades": [{"side": t.side, "symbol": t.symbol, "value": round(t.value), "kind": t.kind, "tax": round(t.tax_now), "cost": round(t.cost),
+                                "why": t.why[:3]} for t in plan.trades]})
             for b in plan.blocked:
                 book.log.append((day, "HOLD", b))
             for d in plan.deferred:
