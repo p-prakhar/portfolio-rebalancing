@@ -62,6 +62,38 @@ universe:
   - {symbol: GLD,  ticker: GLD, name: "Gold (via IBKR)",         tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: gold}
   - {symbol: TLT,  ticker: TLT, name: "US 20y Treasuries (via IBKR)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: bonds}
   - {symbol: TCS,  ticker: TCS.NS, name: "Tata Consultancy Services", tax_class: in_equity, venue: nse_stock, sleeve: india_equity, rotate: false}
+  # --- wider universe: silver/platinum/copper/other metals and semiconductors, India and abroad ---
+  # rotate: false on purpose. Letting the momentum rotation pick from these made the 10-year result slightly WORSE (fewer
+  # winning windows, more turnover and tax; see reports/validation.md). They are still compared (`python main.py compare`)
+  # and handled correctly if you hold them. Flip rotate to true to test your own idea with `python main.py validate`.
+  # US-listed ETFs are bought through IBKR/LRS (foreign tax class: 24 months to long term, 12.5% LTCG, slab on STCG).
+  - {symbol: SLV,  ticker: SLV,  name: "Silver (US, via IBKR)",              tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false}
+  - {symbol: PPLT, ticker: PPLT, name: "Platinum (US, via IBKR)",            tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false}
+  - {symbol: CPER, ticker: CPER, name: "Copper futures ETF (US, via IBKR)",  tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false}
+  - {symbol: COPX, ticker: COPX, name: "Copper miners (US, via IBKR)",       tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false}
+  - {symbol: DBB,  ticker: DBB,  name: "Base metals basket (US, via IBKR)",  tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false}
+  - {symbol: GDX,  ticker: GDX,  name: "Gold miners (US, via IBKR)",         tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false}
+  - {symbol: LIT,  ticker: LIT,  name: "Lithium and battery (US, via IBKR)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false}
+  - {symbol: REMX, ticker: REMX, name: "Rare earths and strategic metals (US, via IBKR)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false}
+  - {symbol: URA,  ticker: URA,  name: "Uranium (US, via IBKR)",             tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false}
+  - {symbol: DBC,  ticker: DBC,  name: "Broad commodities (US, via IBKR)",   tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: commodity, rotate: false}
+  - {symbol: SMH,  ticker: SMH,  name: "Semiconductors, cap-weighted (US, via IBKR)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: semis, rotate: false}
+  - {symbol: SOXX, ticker: SOXX, name: "Semiconductors, ICE index (US, via IBKR)",    tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: semis, rotate: false}
+  - {symbol: XSD,  ticker: XSD,  name: "Semiconductors, equal-weight (US, via IBKR)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: semis, rotate: false}
+  - {symbol: NVDA, ticker: NVDA, name: "NVIDIA (US stock)",                  tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: semis, rotate: false}
+  - {symbol: TSM,  ticker: TSM,  name: "TSMC (US-listed ADR)",               tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: semis, rotate: false}
+  - {symbol: ASML, ticker: ASML, name: "ASML (US-listed)",                   tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: semis, rotate: false}
+  - {symbol: AVGO, ticker: AVGO, name: "Broadcom (US stock)",                tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: semis, rotate: false}
+  # India-listed: metals ETF/stocks and the electronics/semiconductor supply chain (India has no pure semiconductor ETF)
+  - {symbol: METALIETF,  ticker: METALIETF.NS,  name: "Nifty Metal ETF (India)",   tax_class: in_equity, venue: nse_etf, sleeve: metals, rotate: false}
+  - {symbol: SILVERIETF, ticker: SILVERIETF.NS, name: "Silver ETF (India, ICICI)", tax_class: in_other, venue: nse_nonequity_etf, sleeve: metals, rotate: false}
+  - {symbol: MAFANG,     ticker: MAFANG.NS,     name: "Global tech FANG+ ETF (India-listed)", tax_class: in_other, venue: nse_nonequity_etf, sleeve: global_equity, rotate: false}
+  - {symbol: HNGSNGBEES, ticker: HNGSNGBEES.NS, name: "Hang Seng ETF (India-listed)", tax_class: in_other, venue: nse_nonequity_etf, sleeve: global_equity, rotate: false}
+  - {symbol: HINDALCO,   ticker: HINDALCO.NS,   name: "Hindalco (aluminium, copper)", tax_class: in_equity, venue: nse_stock, sleeve: metals, rotate: false}
+  - {symbol: HINDCOPPER, ticker: HINDCOPPER.NS, name: "Hindustan Copper",          tax_class: in_equity, venue: nse_stock, sleeve: metals, rotate: false}
+  - {symbol: VEDL,       ticker: VEDL.NS,       name: "Vedanta (zinc, aluminium, silver)", tax_class: in_equity, venue: nse_stock, sleeve: metals, rotate: false}
+  - {symbol: DIXON,      ticker: DIXON.NS,      name: "Dixon Technologies (electronics manufacturing)", tax_class: in_equity, venue: nse_stock, sleeve: semis, rotate: false}
+  - {symbol: KAYNES,     ticker: KAYNES.NS,     name: "Kaynes Technology (electronics, OSAT push)", tax_class: in_equity, venue: nse_stock, sleeve: semis, rotate: false}
   # Synthetic cash: accrues at cash.rate. Default models an ARBITRAGE FUND, which is taxed
   # like equity (20%/12.5%) instead of at slab like a liquid fund. See docs/EDGES.md.
   - {symbol: CASH, ticker: null, name: "Cash sleeve (arbitrage fund proxy)", tax_class: in_equity, venue: cash_fund, sleeve: cash}
@@ -83,7 +115,7 @@ strategy:
     lookbacks: [126, 252]        # 6m and 12m, NSE momentum-ratio style (return / volatility)
     skip_recent: 21              # skip the last month (short-term reversal)
     weighting: inverse_vol       # equal | inverse_vol
-    max_per_sleeve: {global_equity: 0.5, gold: 0.5, commodity: 0.25, bonds: 0.5}
+    max_per_sleeve: {global_equity: 0.5, gold: 0.5, commodity: 0.25, bonds: 0.5, metals: 0.25, semis: 0.20}
   custom:                        # for any portfolio you supply: keep what you own, sell on converging evidence
     min_flags: 2                 # of: technical downtrend, trailing stop breached, weak momentum
     max_single_stock: 0.10       # trim single stocks above this weight

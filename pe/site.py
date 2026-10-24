@@ -99,6 +99,106 @@ def _verdict(plan: Plan, settings: Settings, bt_table: pd.DataFrame | None, vali
             "delta": delta, "policy": pol, "label": label, "n_trades": len(actionable)}
 
 
+def _blotter(plan: Plan, settings: Settings, px: pd.DataFrame) -> list[dict]:
+    """One row per asset held or targeted: exact shares, weights, drift, cost model and tax estimate (the UI applies the theta rule)."""
+    from .costs import leg_cost
+    from .tax import effective_rate
+    pos = plan.positions
+    cur_val = pos.groupby("symbol").value.sum().to_dict() if not pos.empty else {}
+    cur_qty = pos.groupby("symbol").qty.sum().to_dict() if not pos.empty else {}
+    nav = plan.nav
+    cash_now = nav - sum(cur_val.values())
+    tw = plan.target.weights
+    tgt_val = dict(cur_val) if tw is None else {k: v * nav for k, v in tw.items()}
+    if cash_now > 1:
+        cur_val["CASH"] = cur_val.get("CASH", 0) + cash_now
+        if tw is None:
+            tgt_val["CASH"] = cur_val["CASH"]
+    # Same-index twins (e.g. SETFNIF50 for NIFTYBEES) share one target weight; split it across the twins you hold, pro rata to value.
+    groups: dict[str, list[str]] = {}
+    for sym in set(cur_val) | set(tgt_val):
+        if sym in settings.assets:
+            groups.setdefault(settings.assets[sym].equivalent_of or sym, []).append(sym)
+    for prim, members in groups.items():
+        if len(members) < 2:
+            continue
+        total = sum(tgt_val.get(m, 0.0) for m in members)
+        held = [m for m in members if cur_val.get(m, 0) > 0] or [prim]
+        base = sum(cur_val.get(m, 0.0) for m in held) or 1.0
+        for m in members:
+            tgt_val[m] = total * cur_val.get(m, 0.0) / base if m in held and base else 0.0
+        if held == [prim] and not any(cur_val.get(m, 0) > 0 for m in held):
+            tgt_val[prim] = total
+    engine = {}
+    for t in plan.trades:
+        if not t.kind.startswith("harvest"):
+            engine[t.symbol] = t.side.upper()
+    rows = []
+    for sym in sorted(set(cur_val) | set(tgt_val), key=lambda k: -(max(cur_val.get(k, 0), tgt_val.get(k, 0)))):
+        if sym not in px or sym not in settings.assets:
+            continue
+        a = settings.assets[sym]
+        price = float(px[sym].dropna().iloc[-1])
+        v0 = max(nav * 0.01, 10_000)
+        try:
+            c1 = leg_cost(settings, a, "buy", v0, price, plan.usd_inr)
+            c2 = leg_cost(settings, a, "buy", 2 * v0, price, plan.usd_inr)
+        except Exception:
+            c1 = c2 = 0.0
+        pct = max(0.0, (c2 - c1) / v0)
+        fixed = max(0.0, c1 - pct * v0)
+        taxr = 0.0
+        if not pos.empty and sym in set(pos.symbol):
+            sub = pos[pos.symbol == sym]
+            gains = sum(max(float(r.gain), 0.0) * effective_rate(r.bucket, settings) for _, r in sub.iterrows())
+            taxr = gains / max(float(sub.value.sum()), 1.0)
+        rows.append({"symbol": sym, "name": a.name, "price": round(price, 4), "cur_value": round(cur_val.get(sym, 0.0)), "tgt_value": round(tgt_val.get(sym, 0.0)),
+                     "cur_shares": round(cur_qty.get(sym, 0.0), 4) if sym != "CASH" else round(cur_val.get(sym, 0.0) / price, 4),
+                     "cost_fixed": round(fixed, 2), "cost_pct": round(pct, 6), "tax_rate_on_sale": round(taxr, 5), "engine": engine.get(sym, ""),
+                     "lt_note": "" if pos.empty or sym not in set(pos.symbol) else ("all long term" if bool(pos[pos.symbol == sym].long_term.all()) else "has short-term lots")})
+    return rows
+
+
+def _momentum_matrix(plan: Plan, settings: Settings, px: pd.DataFrame) -> list[dict]:
+    """12-1 month return R, annualised volatility over the same window, M = R / vol and its cross-sectional z-score."""
+    lb = max(settings.strategy["xs"]["lookbacks"])
+    skip = settings.strategy["xs"]["skip_recent"]
+    tiers = {"NIFTYBEES": "Large cap", "SETFNIF50": "Large cap", "JUNIORBEES": "Next 50", "MID150BEES": "Mid cap", "LOWVOLIETF": "Factor", "MOM30IETF": "Factor"}
+    syms = [s for s in settings.rotatable() if s in px] + [s for s in plan.positions.symbol.unique() if s in px and s not in settings.rotatable()] if not plan.positions.empty else settings.rotatable()
+    rows = []
+    for sym in dict.fromkeys(syms):
+        s = px[sym].dropna()
+        if sym == "CASH" or len(s) < lb + skip + 5:
+            continue
+        win = s.iloc[-(lb + 1):-skip]
+        r = float(win.iloc[-1] / win.iloc[0] - 1)
+        rets = win.pct_change().dropna()
+        sig = float(np.sqrt(252 / (len(rets) - 1) * ((rets - rets.mean()) ** 2).sum()))
+        a = settings.assets[sym]
+        rows.append({"symbol": sym, "name": a.name, "region": "US" if a.currency == "USD" else "India", "sleeve": a.sleeve, "tier": tiers.get(sym, ""),
+                     "R": r, "sigma": sig, "M": r / sig if sig > 0 else None, "held": sym in set(plan.positions.symbol) if not plan.positions.empty else False,
+                     "in_target": bool(plan.target.weights and plan.target.weights.get(sym, 0) > 0.005)})
+    ms = np.array([x["M"] for x in rows if x["M"] is not None])
+    mu, sd = (ms.mean(), ms.std(ddof=0)) if len(ms) else (0, 1)
+    for x in rows:
+        x["z"] = None if x["M"] is None or sd == 0 else float((x["M"] - mu) / sd)
+    rows.sort(key=lambda x: -(x["M"] if x["M"] is not None else -9))
+    for i, x in enumerate(rows, 1):
+        x["rank"] = i
+    return rows
+
+
+def _regime_filter(plan: Plan, settings: Settings, px: pd.DataFrame) -> dict:
+    sym = settings.strategy["dual_momentum"]["equity"]
+    s = px[sym].dropna()
+    sma = float(s.iloc[-200:].mean())
+    p = float(s.iloc[-1])
+    eng = plan.target.regime or {}
+    cash_w = None if plan.target.weights is None else float(plan.target.weights.get("CASH", 0.0))
+    return {"benchmark": sym, "price": round(p, 2), "sma200": round(sma, 2), "gap": p / sma - 1, "state": "RISK_ON" if p > sma else "CASH_PRESERVATION",
+            "engine_label": (eng.get("label") or "").replace("_", "-"), "vix": eng.get("vix"), "target_cash_weight": cash_w}
+
+
 def _platform(settings: Settings, sym: str) -> str:
     a = settings.assets.get(sym)
     if a and a.currency == "USD":
@@ -176,7 +276,8 @@ def _factors(plan: Plan, settings: Settings, profile: Profile | None, validation
 
 
 def build(plan: Plan, settings: Settings, timing: list[str], px: pd.DataFrame, bt: tuple | None, profile: Profile | None,
-          others: list[OtherAsset], validation: dict | None, data_note: str, usd_inr: float | None) -> dict:
+          others: list[OtherAsset], validation: dict | None, data_note: str, usd_inr: float | None,
+          universe: list[dict] | None = None) -> dict:
     sleeve = lambda s: settings.assets[s].sleeve if s in settings.assets else "other"
     pos = plan.positions
     cur = pos.groupby("symbol").value.sum().to_dict() if not pos.empty else {}
@@ -215,7 +316,14 @@ def build(plan: Plan, settings: Settings, timing: list[str], px: pd.DataFrame, b
             "current": nodes(cur), "target": nodes(tgt), "trades": trades, "holdings": holdings, "factors": _factors(plan, settings, profile, validation, verdict),
             "steps": _steps(plan, settings, timing), "timing": timing, "notes": plan.notes[:6], "policy_why": plan.target.why,
             "others": [{"kind": o.kind, "name": o.name, "value": round(o.value_inr), "cls": o.asset_class} for o in others],
-            "profile": profile.__dict__ if profile else None, "policy": settings.strategy["policy"], "validation": None, "backtest": None}
+            "universe": universe, "profile": profile.__dict__ if profile else None, "policy": settings.strategy["policy"], "validation": None, "backtest": None}
+    data["regime_filter"] = _regime_filter(plan, settings, px)
+    xs = settings.strategy["xs"]
+    data["rebalance_parameters"] = {"lookback": max(xs["lookbacks"]), "skip": xs["skip_recent"], "top_k": xs["top_k"], "theta_default": 0.015, "theta_min": 0.005, "theta_max": 0.05,
+                                    "sma": settings.strategy["dual_momentum"]["sma"], "core_weight": settings.strategy.get("core_weight"), "check_frequency": settings.timing["check_frequency"],
+                                    "ltcg_exemption": settings.tax["ltcg_exemption"]}
+    data["execution_blotter"] = _blotter(plan, settings, px)
+    data["cross_sectional_universe"] = _momentum_matrix(plan, settings, px)
     if validation:
         from .validate import verdicts
         v = verdicts(validation, VARIANTS[0][0])

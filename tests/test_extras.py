@@ -81,3 +81,28 @@ def test_site_builds_valid_json(tmp_path):
     blob = out.read_text().split('type="application/json">')[1].split("</script>")[0]
     parsed = json.loads(blob)
     assert parsed["verdict"]["call"] in ("HOLD", "REBALANCE") and parsed["steps"]
+    for k in ("regime_filter", "rebalance_parameters", "execution_blotter", "cross_sectional_universe"):
+        assert parsed[k], k
+    assert parsed["regime_filter"]["state"] in ("RISK_ON", "CASH_PRESERVATION")
+    w = [r["cur_value"] for r in parsed["execution_blotter"]]
+    assert abs(sum(w) - parsed["nav"]) < 2 + 0.01 * parsed["nav"]         # blotter covers the portfolio
+    zs = [r["z"] for r in parsed["cross_sectional_universe"] if r["z"] is not None]
+    assert abs(np.mean(zs)) < 1e-6
+
+
+def test_silver_parse_and_compare_math():
+    from pe.goldprice import parse_silver
+    assert parse_silver("<b>Silver</b> ₹1,95,969 / 1kg +0.1%") == 195969.0
+    assert parse_silver("nothing here") is None
+    from pe.config import load_settings
+    from pe import universe_compare as uc
+    s = load_settings()
+    idx = pd.bdate_range("2014-01-01", periods=2800)
+    px = pd.DataFrame({"NIFTYBEES": 100 * 1.0004 ** np.arange(2800), "GOLDBEES": 50 * 1.0003 ** np.arange(2800),
+                       "SMH": 10 * 1.0006 ** np.arange(2800)}, index=idx)
+    rows = {r["symbol"]: r for r in uc.compare(px, s, 85.0)}
+    assert set(rows) == {"NIFTYBEES", "GOLDBEES", "SMH"}
+    r = rows["SMH"]
+    assert r["r5"] > rows["NIFTYBEES"]["r5"] > rows["GOLDBEES"]["r5"]
+    assert r["after_tax_5y"] < r["r5"]          # costs and tax always take something
+    assert "Semiconductors" in uc.report(list(rows.values()))

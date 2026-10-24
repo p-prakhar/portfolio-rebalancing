@@ -166,10 +166,30 @@ def cmd_site(args):
     curves, table, logs = run_all(h.lots, px, vix, settings, start, fx)
     vpath = ROOT / "reports" / "validation.json"
     validation = _json.loads(vpath.read_text()) if vpath.exists() else None
-    data = site.build(plan, settings, timing, px, (curves, table, logs, start), load_profile(), load_other(), validation, note, usd)
+    universe = None
+    if not args.demo:
+        try:
+            from pe import universe_compare as uc, validate as _v
+            ls, lpx, _, _ = _v.load_long(10)
+            universe = uc.compare(lpx, ls, usd)
+        except Exception as exc:    # the page still works without the wider-universe table
+            logging.warning("wider universe skipped: %s", exc)
+    data = site.build(plan, settings, timing, px, (curves, table, logs, start), load_profile(), load_other(), validation, note, usd, universe)
     out = site.render(data, ROOT / settings["report"]["out_dir"] / "index.html")
     print(f"Decision: {data['verdict']['call']} - {data['verdict']['headline']}\nSaved {out}")
     return out
+
+
+def cmd_compare(args):
+    from pe import universe_compare as uc, validate
+    from pe.report import save
+    s, px, vix, closes = validate.load_long(10)
+    fx = closes[s["data"]["fx_ticker"]].dropna().iloc[-1] if s["data"]["fx_ticker"] in closes else None
+    rows = uc.compare(px, s, float(fx) if fx is not None else None)
+    text = uc.report(rows)
+    p = save(text, s, "universe.md")
+    show_md(text)
+    print(f"\nSaved {p}")
 
 
 def cmd_validate(args):
@@ -202,6 +222,7 @@ def main():
     sp.add_argument("--open", action="store_true", help="open the page in your browser")
     vp = sub.add_parser("validate", help="10-year rolling-window robustness test of every strategy (slow the first time)")
     vp.add_argument("--years", type=int, default=10); vp.add_argument("--window-years", type=int, default=3); vp.add_argument("--refresh", action="store_true")
+    sub.add_parser("compare", help="compare metals, semiconductors and other assets in India and abroad, after cost and tax")
     sub.add_parser("shell", help="guided interactive shell with autocomplete: profile, imports, check, site")
     sub.add_parser("reset-window")
     ip = sub.add_parser("import-tradebook", help="build holdings lots from a broker tradebook CSV (FIFO)")
@@ -213,6 +234,7 @@ def main():
     gp = sub.add_parser("gold-prices", help="fetch city-wise gold rates (Bangalore, Raipur, ...)")
     gp.add_argument("--manual", help="e.g. bangalore=14800,raipur=14213 if scraping fails")
     gp.add_argument("--home", default="bangalore")
+    gp.add_argument("--metal", choices=["gold", "silver"], default="gold")
     pp = sub.add_parser("predict-index", help="predict Nifty200 Momentum 30 adds/drops from a constituents CSV")
     pp.add_argument("universe_csv", help="CSV with a Symbol column: the parent index (e.g. Nifty 200)")
     pp.add_argument("--current", help="CSV with a Symbol column: current index members")
@@ -230,6 +252,8 @@ def main():
             webbrowser.open(out.as_uri())
     elif args.cmd == "validate":
         cmd_validate(args)
+    elif args.cmd == "compare":
+        cmd_compare(args)
     elif args.cmd == "shell":
         from pe.tui import run_shell
         run_shell()
@@ -255,6 +279,14 @@ def main():
         from pe import goldprice, realassets
         from pe.report import save
         cfg = realassets.load()
+        if args.metal == "silver":
+            cities = [c for c in cfg["gold_prices"]["cities"]]
+            df, errors = goldprice.silver_snapshot(cities)
+            text = goldprice.silver_report(df, errors, cfg["gold_prices"]["import_duty_pct"], args.home)
+            p = save(text, load_settings(), "silver_prices.md")
+            show_md(text)
+            print(f"\nSaved {p}")
+            return
         manual = dict((k, float(v)) for k, v in (x.split("=") for x in args.manual.split(","))) if args.manual else None
         df, errors = goldprice.snapshot(cfg, manual)
         text = goldprice.report(cfg, df, errors, args.home)

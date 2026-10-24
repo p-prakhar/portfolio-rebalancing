@@ -112,3 +112,57 @@ def report(cfg: dict, df: pd.DataFrame, errors: list[str], home: str = "bangalor
     if errors:
         lines += ["", "Fetch problems: " + "; ".join(errors)]
     return "\n".join(lines)
+
+
+# ---- silver: same source, quoted per kg ----
+def parse_silver(html: str) -> float | None:
+    text = re.sub(r"<[^>]+>", " ", html)
+    text = re.sub(r"\s+", " ", text)
+    m = re.search(r"₹\s*([\d,]+(?:\.\d+)?)\s*/\s*1\s*kg", text, flags=re.I)
+    if m:
+        v = float(m.group(1).replace(",", ""))
+        if 10000 < v < 10_000_000:
+            return v
+    return None
+
+
+def silver_snapshot(cities: list[str], source: str = "https://pricehistoryapp.com/silver/{city}") -> tuple[pd.DataFrame, list[str]]:
+    import requests
+    rows, errors = [], []
+    for c in cities:
+        try:
+            r = requests.get(source.format(city=c), headers=UA, timeout=20)
+            r.raise_for_status()
+            v = parse_silver(r.text)
+            if v is None:
+                raise ValueError("no per-kg rate found")
+            rows.append({"city": c, "inr_per_kg": v})
+        except Exception as exc:
+            code = getattr(getattr(exc, "response", None), "status_code", None)
+            errors.append(f"{c}: {type(exc).__name__}" + (f" {code}" if code else ""))
+    return pd.DataFrame(rows), errors
+
+
+def silver_report(df: pd.DataFrame, errors: list[str], import_duty: float = 0.06, home: str = "bangalore") -> str:
+    lines = [f"# Silver rates by city ({date.today()})", "", "_Per kg, before making charges and 3% GST. Same-day quotes only._", ""]
+    if df.empty:
+        return "\n".join(lines + ["No rates fetched. " + "; ".join(errors)])
+    ref = float(df.loc[df.city == home, "inr_per_kg"].iloc[0]) if (df.city == home).any() else float(df.inr_per_kg.median())
+    lines += ["| city | Rs/kg | vs " + home.title() + " |", "|---|---|---|"]
+    for _, r in df.sort_values("inr_per_kg").iterrows():
+        lines.append(f"| {r.city.title()} | {r.inr_per_kg:,.0f} | {r.inr_per_kg / ref - 1:+.2%} |")
+    try:
+        import yfinance as yf
+        from . import quiet
+        with quiet():
+            d = yf.download(["SI=F", "INR=X"], period="5d", progress=False, auto_adjust=True)["Close"].ffill().iloc[-1]
+        spot = float(d["SI=F"]) * float(d["INR=X"]) / TROY_OZ_G * 1000
+        landed = spot * (1 + import_duty)
+        lines += ["", f"International spot (COMEX) = Rs {spot:,.0f}/kg; with {import_duty:.0%} import duty Rs {landed:,.0f}/kg. Local quote is {ref / landed - 1:+.1%} vs that landed price."]
+    except Exception:
+        pass
+    lines += ["", "**Reading it:** city gaps are small next to making charges, GST and the buyback haircut. Silver ETFs (SILVERBEES, SILVERIETF) avoid all three; "
+                  "US silver (SLV) goes through LRS and is taxed as a foreign asset (24 months to long term)."]
+    if errors:
+        lines += ["", "Fetch problems: " + "; ".join(errors)]
+    return "\n".join(lines)

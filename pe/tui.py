@@ -37,6 +37,8 @@ COMMANDS = {
     "backtest": "12-month replay of every strategy",
     "validate": "10-year robustness test (slow first time)",
     "gold": "today's city gold rates",
+    "silver": "today's city silver rates",
+    "compare": "metals, semiconductors, India vs abroad: returns after cost and tax",
     "where": "where to find each number you need",
     "help": "list commands",
     "quit": "leave",
@@ -278,6 +280,11 @@ def dispatch(cmd: str) -> bool:
         M.cmd_backtest(_ns())
     elif cmd == "validate":
         M.cmd_validate(Namespace(years=10, window_years=3, refresh=False))
+    elif cmd == "compare":
+        M.cmd_compare(None)
+    elif cmd == "silver":
+        sys.argv = ["main.py", "gold-prices", "--metal", "silver"]
+        M.main()
     elif cmd == "gold":
         sys.argv = ["main.py", "gold-prices"]
         M.main()
