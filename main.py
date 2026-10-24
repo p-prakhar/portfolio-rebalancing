@@ -23,6 +23,7 @@ from pe.config import ROOT, load_holdings, load_settings, register_assets, resol
 from pe.data import build_prices, fetch_closes, synthetic_prices
 from pe.engine import make_plan
 from pe.stopping import secretary_decision
+from pe.render import show_md
 from pe.tax import BUCKETS
 
 STATE = ROOT / "state" / "execution.json"
@@ -102,7 +103,7 @@ def cmd_run(args):
     text = live_report(plan, settings, timing, args.demo, note)
     p = save(text, settings, "latest.md")
     save(text, settings, f"check_{plan.as_of}.md")
-    print(text)
+    show_md(text)
     print(f"\nSaved {p}")
     if settings["report"].get("telegram"):
         from pe.notify import telegram
@@ -248,7 +249,7 @@ def main():
         from pe.report import save
         text = assetclasses.universe_report(assetclasses.universe(city_premium=args.city_premium))
         p = save(text, load_settings(), "real_assets.md")
-        print(text)
+        show_md(text)
         print(f"\nSaved {p}")
     elif args.cmd == "gold-prices":
         from pe import goldprice, realassets
@@ -258,7 +259,7 @@ def main():
         df, errors = goldprice.snapshot(cfg, manual)
         text = goldprice.report(cfg, df, errors, args.home)
         p = save(text, load_settings(), "gold_prices.md")
-        print(text)
+        show_md(text)
         print(f"\nSaved {p}")
     elif args.cmd == "predict-index":
         from pe.index_predict import predict

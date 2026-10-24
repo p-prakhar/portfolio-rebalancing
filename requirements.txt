@@ -6,3 +6,4 @@ yfinance>=0.2.40
 matplotlib>=3.8
 requests>=2.31
 pytest>=8
+rich>=13
