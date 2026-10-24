@@ -7,3 +7,14 @@ try:
 except Exception:
     pass
 warnings.filterwarnings("ignore", module=r"yfinance(\..*)?")
+
+
+import contextlib
+
+
+@contextlib.contextmanager
+def quiet():
+    """Suppress all warnings inside a network/library call, whatever filters the library installed."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        yield

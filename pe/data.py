@@ -31,7 +31,9 @@ def _read_csv(path: Path) -> pd.Series:
 def _download(tickers: list[str], start: str) -> pd.DataFrame:
     import yfinance as yf  # imported lazily so offline/demo mode needs no network stack
 
-    df = yf.download(tickers, start=start, auto_adjust=True, progress=False, group_by="column")
+    from . import quiet
+    with quiet():
+        df = yf.download(tickers, start=start, auto_adjust=True, progress=False, group_by="column")
     if df is None or df.empty:
         return pd.DataFrame()
     close = df["Close"] if isinstance(df.columns, pd.MultiIndex) else df[["Close"]].rename(columns={"Close": tickers[0]})

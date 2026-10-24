@@ -54,7 +54,9 @@ def landed_parity(import_duty: float, gst: float = 0.03) -> dict | None:
     """International spot converted to INR per gram, plus duty: what an importer pays."""
     try:
         import yfinance as yf
-        d = yf.download(["GC=F", "INR=X"], period="5d", progress=False, auto_adjust=True)["Close"].ffill().iloc[-1]
+        from . import quiet
+        with quiet():
+            d = yf.download(["GC=F", "INR=X"], period="5d", progress=False, auto_adjust=True)["Close"].ffill().iloc[-1]
         spot = float(d["GC=F"]) * float(d["INR=X"]) / TROY_OZ_G
         return {"spot_inr_g": spot, "landed_ex_gst": spot * (1 + import_duty), "landed_incl_gst": spot * (1 + import_duty) * (1 + gst)}
     except Exception:
