@@ -171,7 +171,9 @@ function lineChart(host, o){
   hit.addEventListener('pointerleave',()=>{ cross.setAttribute('opacity',0); hideTip(); });
   (o.markers||[]).forEach(mk=>{ const g=sv('g',{tabindex:0,role:'button','aria-label':mk.label.replace(/<[^>]+>/g,' '),style:'cursor:pointer'}); g.append(sv('circle',{cx:X(mk.i),cy:Y(mk.y),r:12,fill:'transparent'}), sv('circle',{cx:X(mk.i),cy:Y(mk.y),r:mk.r||5.5,fill:mk.color,stroke:css('--surface'),'stroke-width':2}));
     g.addEventListener('pointermove',e=>{ e.stopPropagation(); showTip(e, mk.label); }); g.addEventListener('pointerleave',hideTip); g.addEventListener('click',()=>mk.click()); g.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); mk.click(); } }); svg.append(g); });
-  if (o.endLabels) o.series.forEach(s=>{ let i=n-1; while(i>0 && s.vals[i]==null) i--; svg.append(sv('text',{x:X(i)-4,y:Y(s.vals[i])-9,'text-anchor':'end','font-size':12,'font-weight':600,fill:css('--ink')}, s.short||s.name)); });
+  if (o.endLabels) { const labs=o.series.map(s=>{ let i=n-1; while(i>0 && s.vals[i]==null) i--; return {s, i, y:Y(s.vals[i])-9}; }).sort((a,b)=>a.y-b.y);
+    for (let k=1;k<labs.length;k++) if (labs[k].y-labs[k-1].y<15) labs[k].y=labs[k-1].y+15;
+    labs.forEach(l=>svg.append(sv('text',{x:X(l.i)-4,y:l.y,'text-anchor':'end','font-size':12,'font-weight':600,fill:css('--ink')}, l.s.short||l.s.name))); }
   host.append(svg);
 }
 function legend(items){ return el('div',{class:'pick',style:'gap:16px'}, items.map(i=>el('span',{class:'small muted',style:'display:inline-flex;gap:6px;align-items:center'}, el('span',{class:'key',style:`background:${i.color};${i.dash?'height:3px;width:16px;border-radius:0;':''}`}), i.name))); }
@@ -323,7 +325,7 @@ function buildSteps(p){
 /* ---------- tab: track record ---------- */
 function buildReplay(p){
   const B=D.backtest, V=D.validation; const draws=[];
-  p.append(el('div',{class:'block'}, el('h1',{},'Would this have worked?'), el('p',{class:'lede'},'The engine replayed the last 12 months day by day with your lots, real prices, fees and Indian tax. Each dot is a day it moved money. Pick a dot to see why.')));
+  p.append(el('div',{class:'block'}, el('h1',{},'Would this have worked?'), el('p',{class:'lede'},'Three tests: following the engine every day for up to 10 years, a replay of the last 12 months with your own lots, and how each strategy fared across many 3-year windows.')));
   if (B){
     const names=Object.keys(B.series), base=names[0], active=B.active||names[1];
     const color=()=>css('--s1');
@@ -375,7 +377,27 @@ function buildReplay(p){
     box.append(el('p',{class:'small muted'},'Most clever strategies lost to simply holding once tax was counted. Today\'s tax rules are applied to all ten years.'));
     draws.push(drawE);
   }
-  if (!B && !V) p.append(el('p',{class:'muted'},'Run python main.py site to add the replay, and python main.py validate for the 10-year test.'));
+  const S=D.daily_sim;
+  if (S){
+    const box=el('div',{class:'panel block'}); p.insertBefore(box, p.children[1]);
+    const hz=[...new Set(S.results.map(r=>r.years))].sort((a,b)=>b-a); let h=hz[0];
+    box.append(el('h2',{},'If you had run it every day and followed every order'), el('p',{class:'small muted'},`Start: ${lakh(S.lump)} split between the two Nifty 50 ETFs. Each day the engine saw only prices up to that day; every order was followed, with fees and tax paid each April. Values are after tax on whatever was still held at the end.`));
+    const pk=el('div',{class:'pick',role:'group','aria-label':'Period'}), host=el('div'), lg=el('div'), st=el('div',{class:'stats'}), say=el('p',{style:'font-weight:500'});
+    hz.forEach(y=>pk.append(el('button',{type:'button','aria-pressed':String(y===h),onclick:()=>{ h=y; pk.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.y==String(y)))); drawS(); },'data-y':String(y)}, `Last ${y} years`)));
+    box.append(pk, say, host, lg, st, el('p',{class:'small muted'},`Caution: the ${S.policy.replace(/_/g,' ')} strategy was chosen after looking at this same history, so these results flatter it. Treat the gap as an upper estimate.`));
+    const COL={buy_hold:'--faint',daily:'--s1',monthly:'--s2'};
+    const drawS=()=>{
+      const rows=S.results.filter(r=>r.years===h), base=rows.find(r=>r.policy==='buy_hold'), d=rows.find(r=>r.check==='daily');
+      const gap=d.cagr_after_tax-base.cagr_after_tax;
+      say.textContent=`Over the last ${h} years, following it daily ${gap>0?'beat':'trailed'} just holding by ${Math.abs(gap*100).toFixed(1)} points a year after tax: ${lakh(d.final_value_after_tax)} against ${lakh(base.final_value_after_tax)}.`;
+      const key=r=>r.policy==='buy_hold'?'buy_hold':r.check;
+      lineChart(host,{dates:base.curve.dates,series:rows.map(r=>({name:r.label,short:r.policy==='buy_hold'?'Hold':r.check==='daily'?'Daily':'Monthly',color:css(COL[key(r)]),vals:r.curve.values.map(v=>v/S.lump*100),dash:r.policy==='buy_hold'?'6 4':null,w:r.check==='daily'?2.5:1.8})),fmt:v=>v.toFixed(0),label:'Value of the portfolio, start = 100',endLabels:true,height:300});
+      lg.innerHTML=''; lg.append(legend(rows.map(r=>({name:r.label,color:css(COL[key(r)]),dash:r.policy==='buy_hold'}))));
+      st.innerHTML=''; rows.forEach(r=>st.append(el('div',{class:'stat'}, el('small',{},r.label), el('b',{},`${pc(r.cagr_after_tax)} a year`), el('div',{class:'small muted'},`Worst fall ${pc(r.max_drawdown)}. Tax ${lakh(r.taxes_paid)}, fees ${lakh(r.costs)}. Traded on ${r.trade_days} days.`))));
+    };
+    draws.push(drawS);
+  }
+  if (!B && !V && !S) p.append(el('p',{class:'muted'},'Run python main.py site to add the replay, and python main.py validate for the 10-year test.'));
   redraw.record = () => draws.forEach(f=>f());
 }
 

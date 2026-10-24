@@ -145,7 +145,7 @@ strategy:
   switch_safety: 1.25            # expected benefit must beat cost x this
 
 timing:
-  check_frequency: monthly       # signal checks in the backtest: monthly | weekly
+  check_frequency: monthly       # signal checks in the backtest: daily | weekly | monthly
   execution: secretary           # immediate | secretary | twap
   window_days: 10                # execution window once a rebalance is approved
   ltcg_wait_max_days: 75         # consider waiting for long-term status if within this many days

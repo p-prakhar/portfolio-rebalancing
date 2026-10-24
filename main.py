@@ -178,6 +178,8 @@ def cmd_site(args):
     data = site.build(plan, settings, timing, px, (curves, table, logs, start), None if example else load_profile(),
                       [] if example else load_other(), validation, note, usd, universe)
     data["example"] = example
+    dpath = ROOT / "reports" / "daily_sim.json"
+    data["daily_sim"] = _json.loads(dpath.read_text()) if dpath.exists() else None
     out = site.render(data, ROOT / settings["report"]["out_dir"] / ("example.html" if example else "index.html"))
     print(f"Decision: {data['verdict']['call']} - {data['verdict']['headline']}\nSaved {out}")
     return out
@@ -226,6 +228,8 @@ def main():
     sp.add_argument("--example", action="store_true", help="build reports/example.html from the made-up example holdings (safe to share)")
     vp = sub.add_parser("validate", help="10-year rolling-window robustness test of every strategy (slow the first time)")
     vp.add_argument("--years", type=int, default=10); vp.add_argument("--window-years", type=int, default=3); vp.add_argument("--refresh", action="store_true")
+    dp = sub.add_parser("simulate-daily", help="follow the engine every day for the last 10, 5 and 2 years, from a Nifty ETF start (slow)")
+    dp.add_argument("--years", default="10,5,2"); dp.add_argument("--workers", type=int, default=6)
     sub.add_parser("compare", help="compare metals, semiconductors and other assets in India and abroad, after cost and tax")
     sub.add_parser("shell", help="guided interactive shell with autocomplete: profile, imports, check, site")
     sub.add_parser("reset-window")
@@ -256,6 +260,11 @@ def main():
             webbrowser.open(out.as_uri())
     elif args.cmd == "validate":
         cmd_validate(args)
+    elif args.cmd == "simulate-daily":
+        from pe import daily_sim
+        out = daily_sim.simulate(tuple(int(x) for x in args.years.split(",")), workers=args.workers)
+        show_md(daily_sim.report(out))
+        print("\nSaved reports/daily_sim.md")
     elif args.cmd == "compare":
         cmd_compare(args)
     elif args.cmd == "shell":

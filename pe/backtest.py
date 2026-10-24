@@ -98,6 +98,8 @@ def _nav(book: Book, px_row: pd.Series) -> float:
 
 
 def _check_days(idx: pd.DatetimeIndex, freq: str) -> set:
+    if freq == "daily":
+        return set(idx)
     s = pd.Series(idx, index=idx)
     key = s.dt.to_period("M") if freq == "monthly" else s.dt.to_period("W")
     return set(s.groupby(key).first().values)
