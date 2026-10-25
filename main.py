@@ -5,6 +5,8 @@
     python main.py                    # guided shell (autocomplete): profile, imports, check, site
     python main.py site --open        # visual decision page
     python main.py validate           # 10-year rolling-window robustness test
+    python main.py crash              # crash guard: early-warning signals, and what a fast exit would cost today
+    python main.py crash-test         # replay past falls: drawdown saved vs whipsaw cost
     python main.py reset-window       # after you have placed the trades, clear the execution window
     add --demo to any command to use synthetic prices (code smoke test only)
 """
@@ -27,6 +29,20 @@ from pe.render import show_md
 from pe.tax import BUCKETS
 
 STATE = ROOT / "state" / "execution.json"
+GUARD_STATE = ROOT / "state" / "crash.json"
+
+
+def guard_mem_load() -> dict:
+    """Pre-exit weights remembered by the crash guard for a buy & hold book (see pe/crash.py)."""
+    return json.loads(GUARD_STATE.read_text()) if GUARD_STATE.exists() else {}
+
+
+def guard_mem_save(mem: dict) -> None:
+    GUARD_STATE.parent.mkdir(exist_ok=True)
+    if mem:
+        GUARD_STATE.write_text(json.dumps(mem))
+    else:
+        GUARD_STATE.unlink(missing_ok=True)
 
 
 def load_data(settings, demo: bool, refresh: bool = False):
@@ -109,10 +125,17 @@ def cmd_run(args):
         note += f"; auto-added from your holdings: {', '.join(sorted(added))}"
     h = resolve_amount_lots(h, px)
     usd = float(fx.iloc[-1]) if fx is not None else None
+    mem = guard_mem_load()
     plan = make_plan(px.index[-1], h.lots, h.cash_inr, px, vix, settings, _fy_realised(h, prof),
-                     lrs_used=h.lrs_remitted_this_fy_inr, usd_inr=usd)
+                     lrs_used=h.lrs_remitted_this_fy_inr, usd_inr=usd, guard_mem=mem)
+    if not (args.demo or args.asof):
+        guard_mem_save(mem)
     timing = timing_step(plan, px, settings) if not args.demo else []
     text = live_report(plan, settings, timing, args.demo, note)
+    if plan.target.guard:
+        from pe import crash
+        drills = [crash.drill(h.lots, h.cash_inr, px, vix, settings, _fy_realised(h, prof), usd, 3)]
+        text = text.replace("## Your holdings", crash.guard_markdown(plan.target.guard, drills) + "\n## Your holdings", 1)
     p = save(text, settings, "latest.md")
     save(text, settings, f"check_{plan.as_of}.md")
     show_md(text)
@@ -176,7 +199,8 @@ def cmd_site(args):
     px, vix, fx, note = load_data(settings, args.demo, args.refresh)
     h = resolve_amount_lots(h, px)
     usd = float(fx.iloc[-1]) if fx is not None else None
-    plan = make_plan(px.index[-1], h.lots, h.cash_inr, px, vix, settings, _fy_realised(h, prof), lrs_used=h.lrs_remitted_this_fy_inr, usd_inr=usd)
+    plan = make_plan(px.index[-1], h.lots, h.cash_inr, px, vix, settings, _fy_realised(h, prof), lrs_used=h.lrs_remitted_this_fy_inr, usd_inr=usd,
+                     guard_mem=dict(guard_mem_load()))
     timing = timing_step(plan, px, settings) if not (args.demo or example) else []
     start = px.index[-1] - timedelta(days=args.days)
     curves, table, logs = run_all(h.lots, px, vix, settings, start, fx)
@@ -214,6 +238,7 @@ def cmd_site(args):
         logging.warning("mutual fund report skipped: %s", exc)
         data["mfs"], data["mf_where"] = [], ""
     data["example"] = example
+    data["crash"] = site.crash_block(plan, settings, h, px, vix, usd, _fy_realised(h, prof))
     dpath = ROOT / "reports" / "daily_sim.json"
     data["daily_sim"] = _json.loads(dpath.read_text()) if dpath.exists() else None
     apath = ROOT / "reports" / "daily_sim_all.json"
@@ -230,6 +255,55 @@ def cmd_site(args):
     out = site.render(data, ROOT / settings["report"]["out_dir"] / ("example.html" if example else "index.html"))
     print(f"Decision: {data['verdict']['call']} - {data['verdict']['headline']}\nSaved {out}")
     return out
+
+
+def cmd_crash(args):
+    """Crash guard status plus a drill: what an exit would cost today, at each level."""
+    from pe import crash
+    settings = load_settings()
+    h = load_holdings(args.holdings)
+    register_assets(settings, h)
+    px, vix, fx, note = load_data(settings, args.demo, args.refresh)
+    h = resolve_amount_lots(h, px)
+    usd = float(fx.iloc[-1]) if fx is not None else None
+    a = crash.assess(px, vix, settings)
+    print(f"Crash guard: level {a['level']} ({a['label']}) as of {px.index[-1].date()}, since {a['since']}. Data: {note}\n")
+    print("\n".join(a["why"]))
+    for f in a["families"]:
+        print(f"  {'ON ' if f['points'] > 0 else 'off'} {f['name']}: {f['detail']}")
+    for lvl in (2, 3):
+        print(f"\nDrill, level {lvl} ({crash.LEVELS[lvl]}):")
+        print(crash.drill_text(crash.drill(h.lots, h.cash_inr, px, vix, settings, _fy_realised(h), usd, lvl)))
+
+
+def cmd_crash_test(args):
+    from pe import crash_backtest as cb
+    from pe.report import save
+    settings = load_settings()
+    if args.variants:
+        res = cb.study(args.years, refresh=args.refresh)
+        text = cb.study_report(res)
+        (ROOT / settings["report"]["out_dir"]).mkdir(exist_ok=True)
+        (ROOT / settings["report"]["out_dir"] / "crash_variants.json").write_text(json.dumps(res, default=str))
+        p = save(text, settings, "crash_variants.md")
+        show_md(text)
+        print(f"\nSaved {p}")
+        return
+    if args.demo:
+        px, vix = cb.synthetic_panel(settings, args.scenario)
+        res = cb.analyse(settings, px, vix, args.years, 1_000_000)
+        banner = f"**SYNTHETIC `{args.scenario}` PRICES: code check only, not evidence.**\n\n"
+    else:
+        res = cb.run(args.years, refresh=args.refresh)
+        banner = ""
+    text = banner + cb.report(res)
+    d = ROOT / settings["report"]["out_dir"]
+    d.mkdir(exist_ok=True)
+    if not args.demo:
+        (d / "crash_test.json").write_text(json.dumps(res, default=str))
+    p = save(text, settings, "crash_test_demo.md" if args.demo else "crash_test.md")
+    show_md(text)
+    print(f"\nSaved {p}")
 
 
 def cmd_compare(args):
@@ -269,7 +343,7 @@ def main():
         sp.add_argument("--refresh", action="store_true", help="ignore the price cache")
         sp.add_argument("--holdings", help="holdings file (default config/holdings.yaml)")
         if name == "run":
-            sp.add_argument("--policy", choices=["buy_hold", "custom", "dual_momentum", "xs_momentum", "core_satellite", "core_xs", "static_mix", "rp_blend", "trend_vol", "risk_parity", "daa"])
+            sp.add_argument("--policy", choices=["buy_hold", "custom", "dual_momentum", "xs_momentum", "core_satellite", "core_xs", "static_mix", "rp_blend", "trend_vol", "risk_parity", "daa", "core_xs+guard", "buy_hold+guard"])
             sp.add_argument("--asof", help="pretend today is this date (YYYY-MM-DD)")
         else:
             sp.add_argument("--days", type=int, default=365)
@@ -283,6 +357,13 @@ def main():
     dp = sub.add_parser("simulate-daily", help="follow the engine every day for the last 10, 5 and 2 years, from a Nifty ETF start (slow)")
     dp.add_argument("--years", default="10,5,2"); dp.add_argument("--workers", type=int, default=6)
     dp.add_argument("--all-strategies", action="store_true", help="run every strategy daily on the core universe")
+    cp = sub.add_parser("crash", help="crash guard: early-warning signals and what a fast exit would cost today")
+    cp.add_argument("--demo", action="store_true"); cp.add_argument("--refresh", action="store_true"); cp.add_argument("--holdings")
+    ct = sub.add_parser("crash-test", help="replay 10 years: how the crash guard did in each fall, and what its false alarms cost (slow)")
+    ct.add_argument("--years", type=int, default=10); ct.add_argument("--refresh", action="store_true")
+    ct.add_argument("--demo", action="store_true", help="synthetic prices (code check only)")
+    ct.add_argument("--variants", action="store_true", help="instead: try the pre-declared guard configurations on the core strategy (slow)")
+    ct.add_argument("--scenario", default="bubble_burst", choices=["steady", "bubble_burst", "v_crash", "chop", "grind_bear"])
     sub.add_parser("compare", help="compare metals, semiconductors and other assets in India and abroad, after cost and tax")
     sub.add_parser("shell", help="guided interactive shell with autocomplete: profile, imports, check, site")
     sub.add_parser("reset-window")
@@ -324,6 +405,10 @@ def main():
             out = daily_sim.simulate(yrs, workers=args.workers)
             show_md(daily_sim.report(out))
             print("\nSaved reports/daily_sim.md")
+    elif args.cmd == "crash":
+        cmd_crash(args)
+    elif args.cmd == "crash-test":
+        cmd_crash_test(args)
     elif args.cmd == "compare":
         cmd_compare(args)
     elif args.cmd == "shell":
