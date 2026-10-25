@@ -108,7 +108,7 @@ universe:
   # (24 months to long term, 12.5%). rotate: false until validation shows rotation into them helps.
   - {symbol: CSPX, ticker: CSPX.L, name: "S&P 500 UCITS Acc (IE, LSE USD line)",      tax_class: foreign, venue: ibkr_ucits, currency: USD, sleeve: global_equity, rotate: false, domicile: IE, accumulating: true, equivalent_of: SPY}
   - {symbol: CNDX, ticker: CNDX.L, name: "Nasdaq 100 UCITS Acc (IE, LSE USD line)",    tax_class: foreign, venue: ibkr_ucits, currency: USD, sleeve: global_equity, rotate: false, domicile: IE, accumulating: true, equivalent_of: QQQ}
-  - {symbol: SWDA, ticker: SWDA.L, name: "MSCI World UCITS Acc (IE, LSE USD line)",    tax_class: foreign, venue: ibkr_ucits, currency: USD, sleeve: global_equity, rotate: false, domicile: IE, accumulating: true}
+  - {symbol: IWDA, ticker: IWDA.L, name: "MSCI World UCITS Acc (IE, LSE USD line)",    tax_class: foreign, venue: ibkr_ucits, currency: USD, sleeve: global_equity, rotate: false, domicile: IE, accumulating: true}
   - {symbol: VWRA, ticker: VWRA.L, name: "FTSE All-World UCITS Acc (IE, LSE USD line)", tax_class: foreign, venue: ibkr_ucits, currency: USD, sleeve: global_equity, rotate: false, domicile: IE, accumulating: true}
   - {symbol: EIMI, ticker: EIMI.L, name: "Emerging markets IMI UCITS Acc (IE, LSE USD line)", tax_class: foreign, venue: ibkr_ucits, currency: USD, sleeve: global_equity, rotate: false, domicile: IE, accumulating: true, equivalent_of: EEM}
   - {symbol: IGLN, ticker: IGLN.L, name: "Physical gold ETC (IE, LSE USD line)",       tax_class: foreign, venue: ibkr_ucits, currency: USD, sleeve: gold, rotate: false, domicile: IE, accumulating: true, equivalent_of: GLD}

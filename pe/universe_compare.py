@@ -52,7 +52,7 @@ INFO: dict[str, tuple[str, str, str]] = {
     "SPY": ("Benchmark", "US", "IBKR via LRS"),
     "CSPX": ("Global equity via UCITS", "Ireland / London", "IBKR via LRS; S&P 500, accumulating, no US estate-tax exposure"),
     "CNDX": ("Global equity via UCITS", "Ireland / London", "IBKR via LRS; Nasdaq 100, accumulating"),
-    "SWDA": ("Global equity via UCITS", "Ireland / London", "IBKR via LRS; developed world, accumulating"),
+    "IWDA": ("Global equity via UCITS", "Ireland / London", "IBKR via LRS; developed world, accumulating"),
     "VWRA": ("Global equity via UCITS", "Ireland / London", "IBKR via LRS; one-fund world incl. emerging markets"),
     "EIMI": ("Global equity via UCITS", "Ireland / London", "IBKR via LRS; emerging markets incl. small caps"),
     "IGLN": ("Global equity via UCITS", "Ireland / London", "IBKR via LRS; physical gold ETC, USD line"),
