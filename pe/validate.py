@@ -50,8 +50,9 @@ def run_window(settings: Settings, px, vix, fx, start: pd.Timestamp, end: pd.Tim
 
 
 def validate(years: int = 10, lump: float = 1_000_000, window_years: int = 3, step_months: int = 12,
-             refresh: bool = False, variants=VARIANTS) -> dict:
-    s, px, vix, closes = load_long(years, refresh)
+             refresh: bool = False, variants=VARIANTS, data=None) -> dict:
+    """`data` = (settings, prices, vix, closes) to use instead of downloading (synthetic runs and tests)."""
+    s, px, vix, closes = data if data else load_long(years, refresh)
     fx = closes[s["data"]["fx_ticker"]].reindex(px.index).ffill() if s["data"]["fx_ticker"] in closes else None
     end = px.index[-1]
     first_signal = px.index[0] + pd.DateOffset(months=14)       # signals need ~13 months of history

@@ -283,6 +283,9 @@ def main():
     dp = sub.add_parser("simulate-daily", help="follow the engine every day for the last 10, 5 and 2 years, from a Nifty ETF start (slow)")
     dp.add_argument("--years", default="10,5,2"); dp.add_argument("--workers", type=int, default=6)
     dp.add_argument("--all-strategies", action="store_true", help="run every strategy daily on the core universe")
+    tp = sub.add_parser("timing", help="compare ways of deciding when to rebalance (bands, calendar, fill rules) with costs, tax and bootstrap")
+    tp.add_argument("--years", type=int, default=10); tp.add_argument("--demo", action="store_true", help="synthetic prices (code check only)")
+    tp.add_argument("--refresh", action="store_true")
     sub.add_parser("compare", help="compare metals, semiconductors and other assets in India and abroad, after cost and tax")
     sub.add_parser("shell", help="guided interactive shell with autocomplete: profile, imports, check, site")
     sub.add_parser("reset-window")
@@ -324,6 +327,12 @@ def main():
             out = daily_sim.simulate(yrs, workers=args.workers)
             show_md(daily_sim.report(out))
             print("\nSaved reports/daily_sim.md")
+    elif args.cmd == "timing":
+        from pe import timing_sweep
+        res = timing_sweep.run(args.years, args.demo, args.refresh)
+        timing_sweep.save(res)
+        show_md(timing_sweep.report(res))
+        print("\nSaved reports/timing.md")
     elif args.cmd == "compare":
         cmd_compare(args)
     elif args.cmd == "shell":

@@ -8,7 +8,12 @@
    spread timing risk rather than to add return; the backtest compares it with
    immediate and TWAP execution so you can see which holds up.
 
-2. Long-term-status wait: when a lot that should be sold turns long term within d days,
+2. Threshold rule (known distribution): for a random walk with daily volatility sigma, act as soon as the price has
+   moved in our favour by z * sigma * sqrt(days left), a barrier that shrinks to zero on the last day. This is the
+   finite-horizon asset-selling rule with the distribution assumed known. On a driftless walk every stopping rule
+   has the same expected fill, so it changes the spread of outcomes, not the average.
+
+3. Long-term-status wait: when a lot that should be sold turns long term within d days,
    waiting saves (STCG rate - LTCG rate) x gain. The expected cost of waiting is the
    expected adverse move of an asset you no longer want, about
    E[max(0, -X)] = sigma * sqrt(d/252) / sqrt(2*pi) of its value for X ~ N(0, sigma^2 d/252).
@@ -49,6 +54,19 @@ def secretary_decision(observed: list[float], n: int, side: str) -> tuple[str, s
         return "execute", f"Day {day} of {n}: last day of the window, so execute regardless of price."
     return "observe", (f"Day {day} of {n}: price {today:.2f} has not beaten the best seen so far; keep waiting "
                        f"(the window closes in {n - day} trading days).")
+
+
+def threshold_decision(observed: list[float], n: int, side: str, sigma: float, z: float = 0.5) -> tuple[str, str]:
+    """Act when today's price is better than the window's first price by z * sigma * sqrt(days left)."""
+    day, today, first = len(observed), observed[-1], observed[0]
+    left = max(n - day, 0)
+    barrier = z * sigma * math.sqrt(left)
+    move = (first - today) / first if side == "buy" else (today - first) / first
+    if day >= n:
+        return "execute", f"Day {day} of {n}: last day of the window, so execute regardless of price."
+    if move >= barrier:
+        return "execute", f"Day {day} of {n}: price is {move:+.2%} in our favour, past the {barrier:.2%} barrier for {left} days left."
+    return "observe", f"Day {day} of {n}: price is {move:+.2%} versus the {barrier:.2%} barrier; keep waiting."
 
 
 def ltcg_wait(gain: float, value: float, days: int, sigma: float, st_rate: float, lt_rate: float,
