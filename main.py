@@ -376,6 +376,7 @@ def main():
     fp = sub.add_parser("forecast", help="test valuation (P/E, earnings yield vs bonds) and forecast overlays against the strategies (slow, needs network)")
     fp.add_argument("--years", type=int, default=10)
     fp.add_argument("--refresh", action="store_true")
+    sub.add_parser("switch", help="test an automatic strategy switcher against fixed strategies (needs simulate-daily --all-strategies first)")
     sub.add_parser("compare", help="compare metals, semiconductors and other assets in India and abroad, after cost and tax")
     sub.add_parser("shell", help="guided interactive shell with autocomplete: profile, imports, check, site")
     sub.add_parser("reset-window")
@@ -429,6 +430,16 @@ def main():
         print("\nSaved reports/timing.md")
     elif args.cmd == "forecast":
         cmd_forecast(args)
+    elif args.cmd == "switch":
+        from pe import switcher
+        src = ROOT / "reports" / "daily_sim_nav.csv"
+        if not src.exists():
+            raise SystemExit("Run `python main.py simulate-daily --all-strategies` first; it saves the daily curves this test needs.")
+        res = switcher.evaluate(switcher.load_navs(src), load_settings())
+        md = switcher.report(res)
+        (ROOT / "reports" / "switcher.md").write_text(md + "\n")
+        show_md(md)
+        print("\nSaved reports/switcher.md")
     elif args.cmd == "compare":
         cmd_compare(args)
     elif args.cmd == "shell":

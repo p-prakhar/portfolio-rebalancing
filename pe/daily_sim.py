@@ -57,6 +57,7 @@ def _one(job: tuple) -> dict:
             "return_after_tax": after, "max_drawdown": m["max_drawdown"], "volatility": m["volatility"],
             "taxes_paid": m["taxes_paid"] + liq, "costs": m["costs"], "fills": len(trades), "decisions": len(decisions),
             "trade_days": len({str(e[0]) for e in trades}),
+            "nav": nav if freq == "daily" and universe == "core" else None,
             "curve": {"dates": [str(d.date()) for d in nav.index[::3]], "values": [round(float(v)) for v in nav.iloc[::3]]}}
 
 
@@ -72,8 +73,12 @@ def simulate_all(horizons=(10, 5, 2), workers: int = 10) -> dict:
     jobs += [(y, name, pol, "daily", "core") for y in horizons for pol, name in ALL_POLICIES.items()]
     with ProcessPoolExecutor(workers) as ex:
         res = list(ex.map(_one, jobs))
+    longest = max(horizons)
+    cols = {r["label"]: r["nav"] for r in res if r["years"] == longest and r["nav"] is not None}
+    if cols:        # full daily value curves feed the strategy switcher (pe/switcher.py)
+        pd.DataFrame(cols).to_csv(ROOT / "reports" / "daily_sim_nav.csv")
     for r in res:
-        r["journal"], r["fills"] = [], []
+        r["journal"], r["fills"], r["nav"] = [], [], None
     out = {"lump": LUMP, "run_on": str(date.today()), "results": res}
     (ROOT / "reports" / "daily_sim_all.json").write_text(json.dumps(out, default=str))
     L = ["# Every strategy, followed daily", "", "Same start and rules as the daily simulation: Rs 10 lakh in the two Nifty 50 ETFs, the engine run each day "
@@ -103,6 +108,8 @@ def simulate(horizons=(10, 5, 2), policy: str | None = None, workers: int = 6) -
                  (y, "Follow monthly, full universe", pol, "monthly", "full")]
     with ProcessPoolExecutor(workers) as ex:
         res = list(ex.map(_one, jobs))
+    for r in res:
+        r["nav"] = None
     out = {"policy": pol, "lump": LUMP, "run_on": str(date.today()), "results": res}
     (ROOT / "reports").mkdir(exist_ok=True)
     (ROOT / "reports" / "daily_sim.json").write_text(json.dumps(out, default=str))
