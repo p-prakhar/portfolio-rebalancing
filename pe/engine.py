@@ -148,7 +148,7 @@ def make_plan(today_ts, lots: list[Lot], cash_inr: float, px_hist: pd.DataFrame,
                     tw[s] = tw.get(s, 0.0) + w * v / sum(held_g.values())
         band = st["min_trade_weight"] * nav
         diffs = {s: tw.get(s, 0.0) * nav - held.get(s, 0.0) for s in set(tw) | set(held)}
-        buys = {s: d for s, d in diffs.items() if d > band}
+        buys = {s: d for s, d in diffs.items() if d > band and not settings.assets[s].sell_only}
         buy_total = sum(buys.values()) or 1.0
         a_buy = sum(alpha.get(s, 0.0) * v for s, v in buys.items()) / buy_total if buys else alpha.get("CASH", 0.0)
         buy_cost_rate = (sum(leg_cost(settings, settings.assets[s], "buy", v, float(px_now[s]), usd_inr)
@@ -261,7 +261,8 @@ def make_plan(today_ts, lots: list[Lot], cash_inr: float, px_hist: pd.DataFrame,
     if harvest and not pos.empty:
         sold = {t.symbol for t in trades if t.side == "sell"}
         remaining = tx["ltcg_exemption"] - min(tx["ltcg_exemption"], max(0.0, running["eq_lt"]))
-        cands = pos[(pos.tax_class == "in_equity") & pos.long_term & (pos.gain > 0) & ~pos.symbol.isin(sold) & (pos.symbol != "CASH")]
+        no_rebuy = [sym for sym, a in settings.assets.items() if a.sell_only]   # harvesting needs a re-buy leg
+        cands = pos[(pos.tax_class == "in_equity") & pos.long_term & (pos.gain > 0) & ~pos.symbol.isin(sold) & (pos.symbol != "CASH") & ~pos.symbol.isin(no_rebuy)]
         if remaining >= 5000 and not cands.empty:
             r = cands.assign(gpu=cands.gain / cands.qty).sort_values("gpu", ascending=False).iloc[0]
             g = min(remaining, r.gain)
@@ -285,7 +286,7 @@ def make_plan(today_ts, lots: list[Lot], cash_inr: float, px_hist: pd.DataFrame,
                 trades.append(Trade(r.symbol, "buy", v, r.price, q, "harvest_gain", why=["Re-buy leg of the gain harvest."],
                                     cost=leg_cost(settings, a, "buy", v, r.price)))
         # loss harvesting
-        losers = pos[(pos.gain < -np.maximum(5000, 0.03 * pos.value)) & ~pos.symbol.isin(sold) & (pos.symbol != "CASH")]
+        losers = pos[(pos.gain < -np.maximum(5000, 0.03 * pos.value)) & ~pos.symbol.isin(sold) & (pos.symbol != "CASH") & ~pos.symbol.isin(no_rebuy)]
         for _, r in losers.iterrows():
             a = settings.assets[r.symbol]
             lot = next(l for l in by_sym[r.symbol] if l.buy_date == r.buy_date and abs(l.qty - r.qty) < 1e-6)

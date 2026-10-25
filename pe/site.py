@@ -203,10 +203,14 @@ def _regime_filter(plan: Plan, settings: Settings, px: pd.DataFrame) -> dict:
             "engine_label": (eng.get("label") or "").replace("_", "-"), "vix": eng.get("vix"), "target_cash_weight": cash_w}
 
 
-def _platform(settings: Settings, sym: str) -> str:
+def _platform(settings: Settings, sym: str, side: str = "sell") -> str:
     a = settings.assets.get(sym)
+    if a and a.broker:
+        return a.broker
     if a and a.currency == "USD":
-        return "E*TRADE (employer shares) or your US broker"
+        return "your LRS broker account (IBKR, INDmoney or Vested)" if side == "buy" else "the US broker that holds it"
+    if a and a.venue == "mutual_fund":
+        return "the fund house website, MF Central or the platform you bought it on"
     return "Kite (or your Indian broker)"
 
 
@@ -220,10 +224,18 @@ def _steps(plan: Plan, settings: Settings, timing: list[str]) -> list[dict]:
     for t in sells:
         lots = "; ".join(f"{q:,.2f} units of the {l.buy_date} lot" for l, q in t.lots) or "see report"
         tax = f" Tax on this sale: about Rs {t.tax_now:,.0f}." if t.tax_now else " No tax is due on this sale."
+        so = settings.assets[t.symbol].sell_only
         steps.append({"title": f"Sell {t.qty:,.2f} {t.symbol} (about Rs {t.value:,.0f})",
-                      "detail": f"In {_platform(settings, t.symbol)}: Orders > Sell {t.symbol}, quantity {t.qty:,.0f} (round down), type Limit at the last price {t.price:,.2f}"
-                                f" or a touch below, product CNC (delivery). Lots used: {lots}.{tax} Costs about Rs {t.cost:,.0f}.",
+                      "detail": (f"In {_platform(settings, t.symbol)}: Stock Plan > Holdings > Sell, {t.qty:,.0f} shares, limit order near the last price. "
+                                 f"Lots used: {lots}.{tax} This account can only sell, so nothing is bought back there."
+                                 if so else f"In {_platform(settings, t.symbol)}: Orders > Sell {t.symbol}, quantity {t.qty:,.0f} (round down), type Limit at the last price {t.price:,.2f}"
+                                f" or a touch below, product CNC (delivery). Lots used: {lots}.{tax} Costs about Rs {t.cost:,.0f}."),
                       "symbol": t.symbol, "why": t.why[:3]})
+        if so:
+            steps.append({"title": "Bring the dollars home", "detail": "Sale proceeds stay in USD in the stock-plan account. Transfer them to your Indian bank "
+                          "(E*TRADE: Transfer money > Withdraw, to your bank's foreign inward remittance details). Your bank converts at its rate; "
+                          "compare it with the market rate, the spread is the real cost. Inward money has no LRS limit. Keep the sale confirmation: "
+                          "you report the gain in your ITR and the shares in Schedule FA."})
     if sells and buys:
         steps.append({"title": "Wait for the sale to settle", "detail": "NSE sales settle the next trading day (T+1); US sales settle T+1 as well. Proceeds show as cash in the broker app."})
     for t in buys:
@@ -233,7 +245,7 @@ def _steps(plan: Plan, settings: Settings, timing: list[str]) -> list[dict]:
         usd = settings.assets[t.symbol].currency == "USD"
         extra = " Buying US assets from India goes through the RBI LRS route: your bank will collect TCS on remittances above the yearly limit, which you can claim as a credit when filing." if usd else ""
         steps.append({"title": f"Buy about {t.qty:,.0f} {t.symbol} (Rs {t.value:,.0f})",
-                      "detail": f"In {_platform(settings, t.symbol)}: Buy {t.symbol}, Limit at {t.price:,.2f}, product CNC. Costs about Rs {t.cost:,.0f}.{extra}",
+                      "detail": f"In {_platform(settings, t.symbol, 'buy')}: Buy {t.symbol}, Limit at {t.price:,.2f}, product CNC. Costs about Rs {t.cost:,.0f}.{extra}",
                       "symbol": t.symbol, "why": t.why[:3]})
     steps.append({"title": "Record what you actually did", "detail": "Re-import your tradebook in the shell (or edit config/holdings.yaml with your real fills), then run `python main.py reset-window` to close the execution window.", "cmd": "python main.py reset-window"})
     return steps

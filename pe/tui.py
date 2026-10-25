@@ -66,7 +66,9 @@ ETRADE_GUIDE = """How to export RSUs from E*TRADE (Morgan Stanley at Work)
   The file gives the vest date, shares and value at vest. In India the vest value is taxed as salary, and later gains are measured
   from that same value; shares held over 24 months are long term. I convert dollars to rupees at the market rate on the vest date;
   your payslip uses the SBI rate, so differences of a rupee or two per dollar are possible.
-  If the layout is not recognised, use add-lot and type the vests in by hand (date, shares, rupee cost per share)."""
+  If the layout is not recognised, use add-lot and type the vests in by hand (date, shares, rupee cost per share).
+  The stock-plan account is treated as SELL ONLY: the engine may suggest selling these shares there, never buying.
+  Any US purchase it suggests goes through a separate LRS broker (IBKR, INDmoney, Vested), funded from your Indian bank."""
 
 WHERE = """Where to find each number
   Equity/ETFs on Zerodha       console.zerodha.com > Reports > Tradebook (CSV)       -> import-kite

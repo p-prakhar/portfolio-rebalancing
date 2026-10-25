@@ -21,6 +21,8 @@ class Asset:
     currency: str = "INR"
     rotate: bool = True
     equivalent_of: str | None = None
+    sell_only: bool = False      # e.g. employer shares in a restricted E*TRADE stock-plan account: can be sold, never bought
+    broker: str = ""             # where this holding sits, used in the order steps
 
 
 @dataclass
@@ -137,7 +139,7 @@ def register_assets(settings: Settings, holdings: Holdings) -> list[str]:
             tax_class=m.get("tax_class", "foreign" if usd else "in_equity"),
             venue=m.get("venue", "ibkr_us" if usd else ("nse_etf" if etf else "nse_stock")),
             sleeve=m.get("sleeve", "global_equity" if usd else "india_equity"),
-            currency="USD" if usd else "INR", rotate=False)
+            currency="USD" if usd else "INR", rotate=False, sell_only=bool(m.get("sell_only", False)), broker=m.get("broker", ""))
         added.append(sym)
     return added
 

@@ -99,6 +99,15 @@ def marginal_slab(p: Profile) -> tuple[float, float, str]:
     return rate, sur, note + "."
 
 
+def apply_broker_rules(settings, p: Profile | None) -> None:
+    """Employer shares held in a restricted stock-plan account (E*TRADE at Work) can only be sold there."""
+    if p and p.employer_ticker and p.employer_broker == "etrade":
+        a = settings.assets.get(p.employer_ticker.upper())
+        if a is not None:
+            a.sell_only = True
+            a.broker = a.broker or "E*TRADE stock plan (sell only)"
+
+
 def apply_tax_profile(settings, p: Profile | None) -> str | None:
     """Set the slab rate and surcharge from the profile's income. Returns the explanation, or None if no income is given."""
     if p is None or (p.gross_salary_inr + p.rsu_perquisite_inr + p.other_income_inr) <= 0:

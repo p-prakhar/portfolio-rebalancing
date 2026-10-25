@@ -98,7 +98,8 @@ def lots_from_etrade(path: str, ticker: str, usd_inr: Callable[[date], float], s
     lots = [{"symbol": ticker.upper(), "qty": round(q, 6), "buy_date": str(d), "price": round(fmv * usd_inr(d), 4), "currency": "USD"}
             for d, q, fmv in dq]
     meta = {ticker.upper(): {"currency": "USD", "tax_class": "foreign", "venue": "ibkr_us", "ticker": ticker.upper(),
-                             "sleeve": "global_equity", "name": f"{ticker.upper()} (employer RSUs, E*TRADE)"}}
+                             "sleeve": "global_equity", "name": f"{ticker.upper()} (employer RSUs, E*TRADE)",
+                             "sell_only": True, "broker": "E*TRADE stock plan (sell only)"}}
     if not lots:
         warns.append("No open lots were produced.")
     return lots, meta, warns

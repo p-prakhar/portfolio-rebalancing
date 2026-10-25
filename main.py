@@ -100,6 +100,8 @@ def cmd_run(args):
     prof, tax_note = _tax_setup(settings)
     h = load_holdings(args.holdings)
     added = register_assets(settings, h)
+    from pe.profile import apply_broker_rules
+    apply_broker_rules(settings, prof)
     px, vix, fx, note = load_data(settings, args.demo, args.refresh)
     if args.asof:
         px = px.loc[:args.asof]
@@ -169,6 +171,8 @@ def cmd_site(args):
     prof, tax_note = _tax_setup(settings, not example)
     h = load_holdings(ROOT / "config" / "holdings.example.yaml" if example else args.holdings)
     register_assets(settings, h)
+    from pe.profile import apply_broker_rules
+    apply_broker_rules(settings, prof)
     px, vix, fx, note = load_data(settings, args.demo, args.refresh)
     h = resolve_amount_lots(h, px)
     usd = float(fx.iloc[-1]) if fx is not None else None
