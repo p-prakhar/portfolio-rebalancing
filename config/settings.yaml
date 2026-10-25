@@ -30,11 +30,18 @@ tax:
   lrs_tcs_threshold: 1000000     # LRS remittances above this per FY attract TCS
   lrs_tcs_rate: 0.20             # TCS is a credit against tax, but it is a cash-flow drag
 
+dividends:
+  us_wht: 0.25                   # US withholding on dividends to an Indian individual (India-US DTAA Art. 10; needs W-8BEN)
+  ie_fund_wht: 0.15              # for reference: US dividends inside an Irish UCITS fund are cut by 15% (treaty); already in its NAV, not creditable to you
+
 costs:
   nse_etf:      {brokerage: 0.0, stt_buy: 0.0,   stt_sell: 0.00001, exch: 0.0000297, sebi: 0.000001, stamp_buy: 0.00015, gst: 0.18, dp_per_sell: 15.93, half_spread: 0.0004}
   nse_nonequity_etf: {brokerage: 0.0, stt_buy: 0.0, stt_sell: 0.0, exch: 0.0000297, sebi: 0.000001, stamp_buy: 0.00015, gst: 0.18, dp_per_sell: 15.93, half_spread: 0.0005}
   nse_stock:    {brokerage: 0.0, stt_buy: 0.001, stt_sell: 0.001,   exch: 0.0000297, sebi: 0.000001, stamp_buy: 0.00015, gst: 0.18, dp_per_sell: 15.93, half_spread: 0.0003}
   ibkr_us:      {commission_per_share_usd: 0.005, min_commission_usd: 1.0, max_commission_pct: 0.01, sec_fee_sell: 0.0000278, half_spread: 0.0002, fx_one_way: 0.0035}
+  # Irish/UCITS ETFs on the London Stock Exchange, USD lines, bought through IBKR. Commission is a rough fixed-style estimate
+  # (min about 3 USD, 0.05% of the trade); confirm against IBKR's current schedule. No UK stamp duty on ETFs.
+  ibkr_ucits:   {commission_pct: 0.0005, min_commission_usd: 3.0, max_commission_pct: 0.01, half_spread: 0.0005, fx_one_way: 0.0035}
   cash_fund:    {half_spread: 0.0, exit_load: 0.0}
   mutual_fund:  {stamp_buy: 0.00005, exit_load: 0.0}   # buy/sell at NAV; exit loads (often 1% within a year) are flagged in the MF report
 
@@ -57,35 +64,35 @@ universe:
   - {symbol: GOLDBEES,   ticker: GOLDBEES.NS,   name: "Gold ETF",                  tax_class: in_other,  venue: nse_nonequity_etf, sleeve: gold}
   - {symbol: SILVERBEES, ticker: SILVERBEES.NS, name: "Silver ETF",                tax_class: in_other,  venue: nse_nonequity_etf, sleeve: commodity}
   - {symbol: MON100,     ticker: MON100.NS,     name: "Nasdaq 100 ETF (NSE-listed, can trade at a premium)", tax_class: in_other, venue: nse_nonequity_etf, sleeve: global_equity}
-  - {symbol: SPY,  ticker: SPY, name: "S&P 500 (via IBKR)",      tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: global_equity}
-  - {symbol: QQQ,  ticker: QQQ, name: "Nasdaq 100 (via IBKR)",   tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: global_equity}
-  - {symbol: EFA,  ticker: EFA, name: "Developed ex-US (via IBKR)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: global_equity}
-  - {symbol: EEM,  ticker: EEM, name: "Emerging markets (via IBKR)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: global_equity}
-  - {symbol: GLD,  ticker: GLD, name: "Gold (via IBKR)",         tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: gold}
-  - {symbol: TLT,  ticker: TLT, name: "US 20y Treasuries (via IBKR)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: bonds}
+  - {symbol: SPY,  ticker: SPY, name: "S&P 500 (via IBKR)",      tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: global_equity, domicile: US, div_yield: 0.013}
+  - {symbol: QQQ,  ticker: QQQ, name: "Nasdaq 100 (via IBKR)",   tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: global_equity, domicile: US, div_yield: 0.006}
+  - {symbol: EFA,  ticker: EFA, name: "Developed ex-US (via IBKR)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: global_equity, domicile: US, div_yield: 0.03}
+  - {symbol: EEM,  ticker: EEM, name: "Emerging markets (via IBKR)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: global_equity, domicile: US, div_yield: 0.025}
+  - {symbol: GLD,  ticker: GLD, name: "Gold (via IBKR)",         tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: gold, domicile: US}
+  - {symbol: TLT,  ticker: TLT, name: "US 20y Treasuries (via IBKR)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: bonds, domicile: US, div_yield: 0.04}
   - {symbol: TCS,  ticker: TCS.NS, name: "Tata Consultancy Services", tax_class: in_equity, venue: nse_stock, sleeve: india_equity, rotate: false}
   # --- wider universe: silver/platinum/copper/other metals and semiconductors, India and abroad ---
   # rotate: false on purpose. Letting the momentum rotation pick from these made the 10-year result slightly WORSE (fewer
   # winning windows, more turnover and tax; see reports/validation.md). They are still compared (`python main.py compare`)
   # and handled correctly if you hold them. Flip rotate to true to test your own idea with `python main.py validate`.
   # US-listed ETFs are bought through IBKR/LRS (foreign tax class: 24 months to long term, 12.5% LTCG, slab on STCG).
-  - {symbol: SLV,  ticker: SLV,  name: "Silver (US, via IBKR)",              tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false}
-  - {symbol: PPLT, ticker: PPLT, name: "Platinum (US, via IBKR)",            tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false}
-  - {symbol: CPER, ticker: CPER, name: "Copper futures ETF (US, via IBKR)",  tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false}
-  - {symbol: COPX, ticker: COPX, name: "Copper miners (US, via IBKR)",       tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false}
-  - {symbol: DBB,  ticker: DBB,  name: "Base metals basket (US, via IBKR)",  tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false}
-  - {symbol: GDX,  ticker: GDX,  name: "Gold miners (US, via IBKR)",         tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false}
-  - {symbol: LIT,  ticker: LIT,  name: "Lithium and battery (US, via IBKR)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false}
-  - {symbol: REMX, ticker: REMX, name: "Rare earths and strategic metals (US, via IBKR)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false}
-  - {symbol: URA,  ticker: URA,  name: "Uranium (US, via IBKR)",             tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false}
-  - {symbol: DBC,  ticker: DBC,  name: "Broad commodities (US, via IBKR)",   tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: commodity, rotate: false}
-  - {symbol: SMH,  ticker: SMH,  name: "Semiconductors, cap-weighted (US, via IBKR)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: semis, rotate: false}
-  - {symbol: SOXX, ticker: SOXX, name: "Semiconductors, ICE index (US, via IBKR)",    tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: semis, rotate: false}
-  - {symbol: XSD,  ticker: XSD,  name: "Semiconductors, equal-weight (US, via IBKR)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: semis, rotate: false}
-  - {symbol: NVDA, ticker: NVDA, name: "NVIDIA (US stock)",                  tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: semis, rotate: false}
-  - {symbol: TSM,  ticker: TSM,  name: "TSMC (US-listed ADR)",               tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: semis, rotate: false}
-  - {symbol: ASML, ticker: ASML, name: "ASML (US-listed)",                   tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: semis, rotate: false}
-  - {symbol: AVGO, ticker: AVGO, name: "Broadcom (US stock)",                tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: semis, rotate: false}
+  - {symbol: SLV,  ticker: SLV,  name: "Silver (US, via IBKR)",              tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false, domicile: US}
+  - {symbol: PPLT, ticker: PPLT, name: "Platinum (US, via IBKR)",            tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false, domicile: US}
+  - {symbol: CPER, ticker: CPER, name: "Copper futures ETF (US, via IBKR)",  tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false, domicile: US}
+  - {symbol: COPX, ticker: COPX, name: "Copper miners (US, via IBKR)",       tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false, domicile: US}
+  - {symbol: DBB,  ticker: DBB,  name: "Base metals basket (US, via IBKR)",  tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false, domicile: US}
+  - {symbol: GDX,  ticker: GDX,  name: "Gold miners (US, via IBKR)",         tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false, domicile: US}
+  - {symbol: LIT,  ticker: LIT,  name: "Lithium and battery (US, via IBKR)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false, domicile: US}
+  - {symbol: REMX, ticker: REMX, name: "Rare earths and strategic metals (US, via IBKR)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false, domicile: US}
+  - {symbol: URA,  ticker: URA,  name: "Uranium (US, via IBKR)",             tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: metals, rotate: false, domicile: US}
+  - {symbol: DBC,  ticker: DBC,  name: "Broad commodities (US, via IBKR)",   tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: commodity, rotate: false, domicile: US}
+  - {symbol: SMH,  ticker: SMH,  name: "Semiconductors, cap-weighted (US, via IBKR)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: semis, rotate: false, domicile: US, div_yield: 0.004}
+  - {symbol: SOXX, ticker: SOXX, name: "Semiconductors, ICE index (US, via IBKR)",    tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: semis, rotate: false, domicile: US, div_yield: 0.006}
+  - {symbol: XSD,  ticker: XSD,  name: "Semiconductors, equal-weight (US, via IBKR)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: semis, rotate: false, domicile: US}
+  - {symbol: NVDA, ticker: NVDA, name: "NVIDIA (US stock)",                  tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: semis, rotate: false, domicile: US}
+  - {symbol: TSM,  ticker: TSM,  name: "TSMC (US-listed ADR)",               tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: semis, rotate: false, domicile: US}
+  - {symbol: ASML, ticker: ASML, name: "ASML (US-listed)",                   tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: semis, rotate: false, domicile: US}
+  - {symbol: AVGO, ticker: AVGO, name: "Broadcom (US stock)",                tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: semis, rotate: false, domicile: US, div_yield: 0.012}
   # India-listed: metals ETF/stocks and the electronics/semiconductor supply chain (India has no pure semiconductor ETF)
   - {symbol: METALIETF,  ticker: METALIETF.NS,  name: "Nifty Metal ETF (India)",   tax_class: in_equity, venue: nse_etf, sleeve: metals, rotate: false}
   - {symbol: SILVERIETF, ticker: SILVERIETF.NS, name: "Silver ETF (India, ICICI)", tax_class: in_other, venue: nse_nonequity_etf, sleeve: metals, rotate: false}
@@ -96,6 +103,16 @@ universe:
   - {symbol: VEDL,       ticker: VEDL.NS,       name: "Vedanta (zinc, aluminium, silver)", tax_class: in_equity, venue: nse_stock, sleeve: metals, rotate: false}
   - {symbol: DIXON,      ticker: DIXON.NS,      name: "Dixon Technologies (electronics manufacturing)", tax_class: in_equity, venue: nse_stock, sleeve: semis, rotate: false}
   - {symbol: KAYNES,     ticker: KAYNES.NS,     name: "Kaynes Technology (electronics, OSAT push)", tax_class: in_equity, venue: nse_stock, sleeve: semis, rotate: false}
+  # --- Global markets via IBKR, Irish UCITS ETFs (USD lines on the London Stock Exchange). See docs/GLOBAL_INVESTING.md ---
+  # Accumulating, Irish-domiciled: no India tax on dividends until you sell, and no US estate-tax exposure. Taxed as foreign assets
+  # (24 months to long term, 12.5%). rotate: false until validation shows rotation into them helps.
+  - {symbol: CSPX, ticker: CSPX.L, name: "S&P 500 UCITS Acc (IE, LSE USD line)",      tax_class: foreign, venue: ibkr_ucits, currency: USD, sleeve: global_equity, rotate: false, domicile: IE, accumulating: true, equivalent_of: SPY}
+  - {symbol: CNDX, ticker: CNDX.L, name: "Nasdaq 100 UCITS Acc (IE, LSE USD line)",    tax_class: foreign, venue: ibkr_ucits, currency: USD, sleeve: global_equity, rotate: false, domicile: IE, accumulating: true, equivalent_of: QQQ}
+  - {symbol: SWDA, ticker: SWDA.L, name: "MSCI World UCITS Acc (IE, LSE USD line)",    tax_class: foreign, venue: ibkr_ucits, currency: USD, sleeve: global_equity, rotate: false, domicile: IE, accumulating: true}
+  - {symbol: VWRA, ticker: VWRA.L, name: "FTSE All-World UCITS Acc (IE, LSE USD line)", tax_class: foreign, venue: ibkr_ucits, currency: USD, sleeve: global_equity, rotate: false, domicile: IE, accumulating: true}
+  - {symbol: EIMI, ticker: EIMI.L, name: "Emerging markets IMI UCITS Acc (IE, LSE USD line)", tax_class: foreign, venue: ibkr_ucits, currency: USD, sleeve: global_equity, rotate: false, domicile: IE, accumulating: true, equivalent_of: EEM}
+  - {symbol: IGLN, ticker: IGLN.L, name: "Physical gold ETC (IE, LSE USD line)",       tax_class: foreign, venue: ibkr_ucits, currency: USD, sleeve: gold, rotate: false, domicile: IE, accumulating: true, equivalent_of: GLD}
+  - {symbol: EWJ,  ticker: EWJ,    name: "Japan (US-listed, US-domiciled; via IBKR)",  tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: global_equity, rotate: false, domicile: US, div_yield: 0.02}
   # Synthetic cash: accrues at cash.rate. Default models an ARBITRAGE FUND, which is taxed
   # like equity (20%/12.5%) instead of at slab like a liquid fund. See docs/EDGES.md.
   - {symbol: CASH, ticker: null, name: "Cash sleeve (arbitrage fund proxy)", tax_class: in_equity, venue: cash_fund, sleeve: cash}

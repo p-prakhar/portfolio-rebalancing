@@ -23,6 +23,9 @@ class Asset:
     equivalent_of: str | None = None
     sell_only: bool = False      # e.g. employer shares in a restricted E*TRADE stock-plan account: can be sold, never bought
     broker: str = ""             # where this holding sits, used in the order steps
+    domicile: str | None = None   # US | IE: where the fund is legally based (drives dividend tax and US estate-tax exposure)
+    div_yield: float = 0.0        # approx. gross dividend yield; US-domiciled funds lose tax on it every year
+    accumulating: bool = False    # income reinvested inside the fund (Irish UCITS Acc lines)
 
 
 @dataclass
@@ -84,7 +87,8 @@ def load_settings(path: str | Path | None = None) -> Settings:
             symbol=a["symbol"], ticker=a.get("ticker"), name=a.get("name", a["symbol"]),
             tax_class=a["tax_class"], venue=a["venue"], sleeve=a.get("sleeve", "other"),
             currency=a.get("currency", "INR"), rotate=a.get("rotate", True),
-            equivalent_of=a.get("equivalent_of"),
+            equivalent_of=a.get("equivalent_of"), domicile=a.get("domicile"),
+            div_yield=float(a.get("div_yield", 0.0)), accumulating=bool(a.get("accumulating", False)),
         )
     return Settings(raw=raw, assets=assets)
 
@@ -139,7 +143,9 @@ def register_assets(settings: Settings, holdings: Holdings) -> list[str]:
             tax_class=m.get("tax_class", "foreign" if usd else "in_equity"),
             venue=m.get("venue", "ibkr_us" if usd else ("nse_etf" if etf else "nse_stock")),
             sleeve=m.get("sleeve", "global_equity" if usd else "india_equity"),
-            currency="USD" if usd else "INR", rotate=False, sell_only=bool(m.get("sell_only", False)), broker=m.get("broker", ""))
+            currency="USD" if usd else "INR", rotate=False, sell_only=bool(m.get("sell_only", False)), broker=m.get("broker", ""),
+            domicile=m.get("domicile", "US" if usd else None),
+            div_yield=float(m.get("div_yield", 0.0)), accumulating=bool(m.get("accumulating", False)))
         added.append(sym)
     return added
 
