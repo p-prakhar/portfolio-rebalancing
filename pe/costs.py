@@ -17,6 +17,10 @@ def cost_breakdown(settings: Settings, asset: Asset, side: str, value: float, pr
         return {"commission": min(comm_usd * fx, value * c["max_commission_pct"]),
                 "SEC fee": value * c["sec_fee_sell"] if side == "sell" else 0.0,
                 "spread": value * c["half_spread"]}
+    if asset.venue == "ibkr_ucits":   # LSE/Xetra-listed UCITS ETF, USD line; % commission with a floor, no stamp duty on ETFs
+        comm_usd = max(c["min_commission_usd"], value / (usd_inr or 85.0) * c["commission_pct"])
+        return {"commission": min(comm_usd * (usd_inr or 85.0), value * c["max_commission_pct"]),
+                "spread": value * c["half_spread"]}
     if asset.venue == "mutual_fund":
         return {"stamp duty": value * c["stamp_buy"] if side == "buy" else 0.0, "exit load": value * c.get("exit_load", 0.0) if side == "sell" else 0.0}
     if asset.venue == "cash_fund":

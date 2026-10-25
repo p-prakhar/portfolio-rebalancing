@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 from .config import ROOT, Settings
+from .global_markets import apply_dividend_drag
 
 log = logging.getLogger(__name__)
 
@@ -126,6 +127,7 @@ def build_prices(settings: Settings, closes: pd.DataFrame) -> tuple[pd.DataFrame
                 log.warning("No FX series; dropping %s", sym)
                 continue
             s = s * filled[cfg["fx_ticker"]]
+            s = apply_dividend_drag(settings, a, s)
         prices[sym] = s
     px = pd.DataFrame(prices, index=cal)
     px["CASH"] = cash_series(cal, settings["cash"]["rate"])
