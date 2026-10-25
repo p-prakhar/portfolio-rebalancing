@@ -87,3 +87,16 @@ def test_fifo_is_default_and_sells_oldest_first():
     assert [l.buy_date for l, _ in got] == [date(2024, 6, 3)]           # specific-lot mode picks the loss first
     pos = pd.DataFrame({"symbol": ["A", "A", "B"], "buy_date": [date(2024, 5, 1), date(2023, 5, 1), date(2024, 1, 1)]})
     assert sorted(_oldest_rows(pos)) == [1, 2]
+
+
+def test_significance_centres_on_after_tax_return():
+    rng = np.random.default_rng(8)
+    n = 1500
+    idx = pd.bdate_range("2020-01-01", periods=n)
+    base = np.cumprod(1 + rng.normal(0.0004, 0.01, n))
+    strat = base * np.cumprod(1 + rng.normal(-0.0001, 0.003, n))     # pre-tax curve lags (tax paid along the way)
+    curves = pd.DataFrame({"base": base, "s": strat, "t": strat}, index=idx)
+    full = {"base": {"cagr_after_tax": 0.10}, "s": {"cagr_after_tax": 0.105}, "t": {"cagr_after_tax": 0.10}}
+    st = significance(curves, "base", full, 6.0)
+    assert abs(st["s"]["excess"] - (np.log(1.105) - np.log(1.10))) < 1e-9
+    assert st["s"]["lo"] < st["s"]["excess"] < st["s"]["hi"]

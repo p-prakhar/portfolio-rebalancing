@@ -57,7 +57,12 @@ def bootstrap_excess(strategy_nav: np.ndarray, base_nav: np.ndarray, n_boot: int
     Blocks of ~3 months keep volatility clustering and trend in each resample. `p_positive` is the share of
     resamples with positive excess, a rough chance the edge is more than luck of this one history.
     """
-    r = np.diff(np.log(strategy_nav)) - np.diff(np.log(base_nav))
+    return bootstrap_daily(np.diff(np.log(strategy_nav)) - np.diff(np.log(base_nav)), n_boot, block, seed)
+
+
+def bootstrap_daily(r: np.ndarray, n_boot: int = 2000, block: int = 63, seed: int = 7) -> dict:
+    """Same interval, starting from a daily excess log-return series."""
+    r = np.asarray(r, dtype=float)
     r = r[np.isfinite(r)]
     if len(r) < 2 * block:
         return {"excess": None, "lo": None, "hi": None, "p_positive": None}
