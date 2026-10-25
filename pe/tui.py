@@ -84,8 +84,9 @@ KITE_GUIDE = """How to export from Zerodha Kite
 
 ETRADE_GUIDE = """How to export RSUs from E*TRADE (Morgan Stanley at Work)
   1. Log in to etrade.com > At Work > My Account > Benefit History.
-  2. Click Download > Download Expanded. Choose the file format (CSV or Excel); either works here.
-  3. If you already sold some shares, also tell me how many in total, and I will remove the oldest first.
+  2. Click Download > Download Expanded and save the Excel file (BenefitHistory.xlsx). It holds both RSUs and ESPP.
+  3. Shares you already sold are worked out from the file's sellable quantity and removed oldest first.
+  The file stays where you saved it; only the resulting tax lots go into config/holdings.yaml, which git ignores.
   The file gives the vest date, shares and value at vest. In India the vest value is taxed as salary, and later gains are measured
   from that same value; shares held over 24 months are long term. I convert dollars to rupees at the market rate on the vest date;
   your payslip uses the SBI rate, so differences of a rupee or two per dollar are possible.
@@ -218,8 +219,10 @@ def do_import_etrade() -> None:
     if not ticker or not files:
         print("Need a ticker and a readable file.")
         return
-    sold = _number("Shares already sold in total (0 if none)", 0)
     from .etrade import fx_lookup, lots_from_etrade
+    expanded = files[0].lower().endswith((".xlsx", ".xls"))
+    # the expanded workbook says how many shares are still sellable, so sold shares are worked out from it
+    sold = 0.0 if expanded else _number("Shares already sold in total (0 if none)", 0)
     print("Fetching USD/INR history...")
     try:
         fx = fx_lookup()
@@ -233,9 +236,16 @@ def do_import_etrade() -> None:
         return
     for w in warns:
         print("  note:", w)
+    if not lots:
+        print("  Nothing was imported: no delivered vests or purchases were found in that file. Check it is the "
+              "'Download Expanded' Benefit History, or add the lots with add-lot.")
+        return
     if lots:
         merge_lots(lots, meta, replace_symbols={ticker})
-        print(f"Imported {len(lots)} lot(s) of {ticker}, {sum(l['qty'] for l in lots):,.2f} shares in total.")
+        print(f"Imported {len(lots)} lot(s) of {ticker}, {sum(l['qty'] for l in lots):,.2f} shares in total:")
+        for l in lots:
+            print(f"    {l['buy_date']}  {l['qty']:>8,.2f} shares  cost Rs {l['price']:>9,.2f} per share")
+        print("  Cost is the market value on the vest or purchase date, in rupees, which is what Indian tax uses.")
         if prof is None or prof.employer_ticker != ticker:
             p = prof or Profile()
             p.employer_ticker, p.has_rsu, p.employer_broker = ticker, True, "etrade"

@@ -8,3 +8,4 @@ requests>=2.31
 pytest>=8
 rich>=13
 casparser>=0.7
+openpyxl>=3.1

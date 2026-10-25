@@ -14,3 +14,9 @@ config/other_assets.yaml
 state/history
 data/cache*/
 config/fds.yaml
+# personal statements, never commit
+*.xlsx
+*.xls
+*.pdf
+BenefitHistory*
+tradebook*.csv

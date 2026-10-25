@@ -47,9 +47,114 @@ def _num(x) -> float:
     return float(str(x).replace("$", "").replace(",", "").strip())
 
 
+def _date(x):
+    d = pd.to_datetime(x, errors="coerce", format="mixed", dayfirst=False)
+    return None if pd.isna(d) else d.date()
+
+
+def _rsu_vests(df: pd.DataFrame) -> tuple[list, float]:
+    """Benefit History 'Restricted Stock' layout: one 'Vest Schedule' row per vest (Vest Date, vested quantity) and a
+    matching 'Tax Withholding' row with the Taxable Gain (vested qty x FMV) and the tax withheld. Shares withheld for tax
+    (sell-to-cover) never reach you, so the lot is vested minus withheld. Returns
+    ([(date, net shares, fmv usd, source)], sellable qty from the grant rows)."""
+    cols = list(df.columns)
+    rt = df[cols[0]].astype(str).str.strip().str.lower()
+    find = lambda name, nth=0: [c for c in cols if str(c).strip().lower().startswith(name)][nth]
+    c_grant, c_period, c_vdate = find("grant number"), find("vest period"), find("vest date")
+    c_vested = [c for c in cols if str(c).strip().lower().startswith("vested qty")][-1]   # the vest-section column, not the grant total
+    c_gain, c_wh = find("taxable gain"), find("withholding amount")
+    sellable_cols = [c for c in cols if str(c).strip().lower().startswith("sellable qty")]
+    sellable = float(pd.to_numeric(df.loc[rt == "grant", sellable_cols[0]], errors="coerce").fillna(0).sum()) if sellable_cols else 0.0
+    num = lambda v: pd.to_numeric(str(v).replace("$", "").replace(",", ""), errors="coerce")
+    gains, withheld = {}, {}
+    for _, r in df[rt == "tax withholding"].iterrows():
+        k = (str(r[c_grant]), str(r[c_period]))
+        g, w = num(r[c_gain]), num(r[c_wh])
+        if pd.notna(g):
+            gains[k] = gains.get(k, 0.0) + float(g)
+        if pd.notna(w):
+            withheld[k] = withheld.get(k, 0.0) + float(w)
+    out = []
+    for _, r in df[rt == "vest schedule"].iterrows():
+        d = _date(r[c_vdate])
+        vested = pd.to_numeric(r[c_vested], errors="coerce")
+        if d is None or pd.isna(vested) or vested <= 0 or d > date.today():
+            continue            # future vest, nothing delivered yet
+        k = (str(r[c_grant]), str(r[c_period]))
+        g = gains.get(k)
+        fmv = g / vested if g else None
+        net = float(vested) - (round(withheld.get(k, 0.0) / fmv) if fmv else 0)
+        out.append((d, net, fmv, f"RSU vest {d} (grant {r[c_grant]})"))
+    return out, sellable
+
+
+def _espp_purchases(df: pd.DataFrame) -> tuple[list, float]:
+    """Benefit History 'ESPP' layout: one 'Purchase' row per purchase. Indian cost basis is the FMV on the purchase
+    date (the discount is taxed as salary), not the discounted purchase price."""
+    cols = list(df.columns)
+    rt = df[cols[0]].astype(str).str.strip().str.lower()
+    find = lambda name: [c for c in cols if str(c).strip().lower().startswith(name)][0]
+    c_date, c_fmv = find("purchase date"), find("purchase date fmv")
+    c_qty = [c for c in cols if str(c).strip().lower().startswith("net shares")] or [c for c in cols if str(c).strip().lower().startswith("purchased qty")]
+    c_qty = c_qty[0]
+    sell = [c for c in cols if str(c).strip().lower().startswith("sellable qty")]
+    out, sellable = [], 0.0
+    for _, r in df[rt == "purchase"].iterrows():
+        d = _date(r[c_date])
+        q = pd.to_numeric(r[c_qty], errors="coerce")
+        fmv = pd.to_numeric(str(r[c_fmv]).replace("$", "").replace(",", ""), errors="coerce")
+        if d is None or pd.isna(q) or q <= 0:
+            continue
+        out.append((d, float(q), None if pd.isna(fmv) else float(fmv), f"ESPP purchase {d}"))
+        if sell:
+            sellable += float(pd.to_numeric(r[sell[0]], errors="coerce") or 0)
+    return out, sellable
+
+
+def lots_from_benefit_history(path: str, ticker: str, usd_inr: Callable[[date], float]) -> tuple[list[dict], dict, list[str]] | None:
+    """The E*TRADE 'Download Expanded' workbook (sheets 'Restricted Stock' and 'ESPP'). None if the file is not that layout."""
+    if not path.lower().endswith((".xlsx", ".xls")):
+        return None
+    sheets = pd.read_excel(path, sheet_name=None)
+    rsu = next((df for name, df in sheets.items() if "restricted" in name.lower()), None)
+    espp = next((df for name, df in sheets.items() if "espp" in name.lower()), None)
+    if rsu is None and espp is None:
+        return None
+    rows, sellable, warns = [], 0.0, []
+    for df, fn in ((rsu, _rsu_vests), (espp, _espp_purchases)):
+        if df is not None and not df.empty:
+            r, s = fn(df)
+            rows += r
+            sellable += s
+    rows.sort(key=lambda x: x[0])
+    total = sum(q for _, q, _, _ in rows)
+    sold = max(0.0, total - sellable) if sellable else 0.0
+    if sold > 1e-6:
+        warns.append(f"The statement shows {sellable:g} sellable shares against {total:g} received, so {sold:g} were sold or "
+                     "transferred; the oldest are removed first (Indian FIFO).")
+    left, out = sold, []
+    for d, q, fmv, src in rows:
+        take = min(q, left)
+        left -= take
+        q -= take
+        if q <= 1e-9:
+            continue
+        if fmv is None:
+            warns.append(f"{src}: no market value found, skipped; add it with add-lot.")
+            continue
+        out.append({"symbol": ticker.upper(), "qty": round(q, 6), "buy_date": str(d), "price": round(fmv * usd_inr(d), 4), "currency": "USD"})
+    meta = {ticker.upper(): {"currency": "USD", "tax_class": "foreign", "venue": "ibkr_us", "ticker": ticker.upper(),
+                             "sleeve": "global_equity", "name": f"{ticker.upper()} (employer RSU/ESPP, E*TRADE)",
+                             "sell_only": True, "broker": "E*TRADE stock plan (sell only)"}}
+    return out, meta, warns
+
+
 def lots_from_etrade(path: str, ticker: str, usd_inr: Callable[[date], float], sold_qty: float = 0.0
                      ) -> tuple[list[dict], dict, list[str]]:
     """Return (lots, meta, warnings). sold_qty: shares already sold (removed oldest first)."""
+    bh = lots_from_benefit_history(path, ticker, usd_inr)
+    if bh is not None:
+        return bh
     df = _read(path)
     df.columns = [str(c).strip() for c in df.columns]
     cols = {c.lower(): c for c in df.columns}
