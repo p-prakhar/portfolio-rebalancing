@@ -283,6 +283,7 @@ def main():
     dp = sub.add_parser("simulate-daily", help="follow the engine every day for the last 10, 5 and 2 years, from a Nifty ETF start (slow)")
     dp.add_argument("--years", default="10,5,2"); dp.add_argument("--workers", type=int, default=6)
     dp.add_argument("--all-strategies", action="store_true", help="run every strategy daily on the core universe")
+    sub.add_parser("switch", help="test an automatic strategy switcher against fixed strategies (needs simulate-daily --all-strategies first)")
     sub.add_parser("compare", help="compare metals, semiconductors and other assets in India and abroad, after cost and tax")
     sub.add_parser("shell", help="guided interactive shell with autocomplete: profile, imports, check, site")
     sub.add_parser("reset-window")
@@ -324,6 +325,16 @@ def main():
             out = daily_sim.simulate(yrs, workers=args.workers)
             show_md(daily_sim.report(out))
             print("\nSaved reports/daily_sim.md")
+    elif args.cmd == "switch":
+        from pe import switcher
+        src = ROOT / "reports" / "daily_sim_nav.csv"
+        if not src.exists():
+            raise SystemExit("Run `python main.py simulate-daily --all-strategies` first; it saves the daily curves this test needs.")
+        res = switcher.evaluate(switcher.load_navs(src), load_settings())
+        md = switcher.report(res)
+        (ROOT / "reports" / "switcher.md").write_text(md + "\n")
+        show_md(md)
+        print("\nSaved reports/switcher.md")
     elif args.cmd == "compare":
         cmd_compare(args)
     elif args.cmd == "shell":
