@@ -151,3 +151,17 @@ def test_year_insights_rules():
     assert describe({"nifty": 0.15, "nifty_dd": -0.36}).startswith("Crash")
     assert "Rupee fell" in describe({"nifty": 0.08, "nifty_dd": -0.06, "usdinr": 0.09})
     assert describe({}) == "Not enough data."
+def test_sell_only_never_bought_or_harvested():
+    from pe.config import Lot, load_settings, register_assets, Holdings
+    from pe.data import synthetic_prices
+    from pe.engine import make_plan
+    s = load_settings()
+    h = Holdings(lots=[], meta={"ACME": {"currency": "USD", "sell_only": True, "ticker": "ACME"}})
+    register_assets(s, h)
+    px, vix = synthetic_prices(s)
+    px["ACME"] = px["SPY"] * 0.5
+    lots = [Lot("ACME", 100, px.index[-400].date(), float(px["ACME"].iloc[-400]) * 2)]   # deep loss: would normally be harvested
+    for pol in ("buy_hold", "core_xs", "custom"):
+        plan = make_plan(px.index[-1], lots, 0, px, vix, s, {}, pol)
+        assert not [t for t in plan.trades if t.symbol == "ACME" and t.side == "buy"], pol
+        assert not [t for t in plan.trades if t.symbol == "ACME" and t.kind.startswith("harvest")], pol
