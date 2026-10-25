@@ -21,6 +21,7 @@ import pandas as pd
 from .backtest import VARIANTS, run_all
 from .config import ROOT, Lot, Settings, load_settings
 from .data import build_prices, fetch_closes
+from .stats import bootstrap_excess, deflated_sharpe
 
 
 def load_long(years: int = 10, refresh: bool = False):
@@ -32,6 +33,21 @@ def load_long(years: int = 10, refresh: bool = False):
     closes = fetch_closes(s, refresh)
     px, vix = build_prices(s, closes)
     return s, px, vix, closes
+
+
+def significance(curves: pd.DataFrame, base: str) -> dict:
+    """Per variant: bootstrap range of annual excess over the baseline, and the deflated-Sharpe probability that it
+    survives having tried len(curves.columns) - 1 alternatives."""
+    rets = np.log(curves).diff().dropna()
+    ex = {n: (rets[n] - rets[base]).to_numpy() for n in curves.columns if n != base}
+    trial_sr = [float(e.mean() / e.std(ddof=1)) for e in ex.values() if e.std(ddof=1) > 0]
+    out = {}
+    for n in ex:
+        b = bootstrap_excess(curves[n].to_numpy(), curves[base].to_numpy())
+        b["deflated_sharpe"] = deflated_sharpe(ex[n], trial_sr)
+        out[n] = b
+    out["_trials"] = len(ex)
+    return out
 
 
 def _cagr(r: float, years: float) -> float:
@@ -69,6 +85,7 @@ def validate(years: int = 10, lump: float = 1_000_000, window_years: int = 3, st
                            "taxes_paid": r["taxes_paid"], "costs": r["costs"], "turnover_x": r["turnover_x"],
                            "volatility": r["volatility"], "sharpe": r["sharpe"]}
     out["full"] = full_rows
+    out["stats"] = significance(curves, base)
     out["curves"] = {"dates": [str(d.date()) for d in curves.index[::5]],
                      "series": {c: [round(float(v), 0) for v in curves[c].iloc[::5]] for c in curves.columns}}
 
@@ -111,7 +128,8 @@ def validate(years: int = 10, lump: float = 1_000_000, window_years: int = 3, st
 
 def verdicts(res: dict, base: str) -> dict:
     """Robust = beats buy & hold in a majority of windows AND median excess positive in both halves
-    AND the worst window loses less than 5 points a year. Labels, not guarantees."""
+    AND the worst window loses less than 5 points a year AND the 90% bootstrap range of excess return
+    stays above zero. Labels, not guarantees."""
     out = {}
     for n, w in res["windows"].items():
         if n == base:
@@ -120,9 +138,26 @@ def verdicts(res: dict, base: str) -> dict:
             and (w["worst_excess"] or -1) > -0.05
         dd_only = (w["median_dd_improvement"] or 0) > 0.03 and (w["median_excess"] or -1) > -0.02
         promising = (w["win_rate"] or 0) >= 0.7 and (w["median_excess"] or -1) > 0 and (w["worst_excess"] or -1) > -0.05
+        st = res.get("stats", {}).get(n)
+        if ok and st and st.get("lo") is not None and st["lo"] <= 0:
+            ok = False          # consistent in these windows, but a resampled history can erase it
         out[n] = ("robust edge" if ok else "promising, not proven" if promising else
                   "cuts drawdown at little cost" if dd_only else "no reliable edge")
     return out
+
+
+def _range(res: dict, n: str, base: str) -> str:
+    st = res.get("stats", {}).get(n)
+    if n == base or not st or st.get("lo") is None:
+        return "-"
+    return f"{st['lo']:+.1%} to {st['hi']:+.1%}"
+
+
+def _chance(res: dict, n: str, base: str) -> str:
+    st = res.get("stats", {}).get(n)
+    if n == base or not st or st.get("deflated_sharpe") is None:
+        return "-"
+    return f"{st['deflated_sharpe']:.0%}"
 
 
 def report(res: dict, base: str) -> str:
@@ -133,17 +168,22 @@ def report(res: dict, base: str) -> str:
          "an edge repeats or was one lucky stretch. Parameters were not tuned on these windows.", ""]
     if res["missing_assets"]:
         L.append(f"_No history for: {', '.join(res['missing_assets'])}; they enter the universe only once data exists._\n")
-    L += ["| strategy | CAGR after tax | max drawdown | tax paid | costs | windows won | median excess/yr | worst window | early half | late half | verdict |",
-          "|---|---|---|---|---|---|---|---|---|---|---|"]
+    L += ["| strategy | CAGR after tax | max drawdown | tax paid | costs | windows won | median excess/yr | worst window | early half | late half | 90% range of excess/yr | chance it is real | verdict |",
+          "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     f = lambda x: "-" if x is None else f"{x:+.1%}"
     for n, r in res["full"].items():
         w = res["windows"][n]
         L.append(f"| {n} | {r['cagr_after_tax']:.1%} | {r['max_drawdown']:.1%} | {r['taxes_paid']:,.0f} | {r['costs']:,.0f} | "
                  f"{'-' if n == base else f'{w['win_rate']:.0%}'} | {'-' if n == base else f(w['median_excess'])} | {'-' if n == base else f(w['worst_excess'])} | "
-                 f"{'-' if n == base else f(w['early_median_excess'])} | {'-' if n == base else f(w['late_median_excess'])} | {v.get(n, 'baseline')} |")
+                 f"{'-' if n == base else f(w['early_median_excess'])} | {'-' if n == base else f(w['late_median_excess'])} | "
+                 f"{_range(res, n, base)} | {_chance(res, n, base)} | {v.get(n, 'baseline')} |")
     L += ["", "_excess = annualised after-tax return minus buy & hold in the same window. 'robust edge' needs a win in at least 60% of windows, "
               "a positive median in both halves, and no window worse than -5 points a year. 'promising' wins 70%+ of windows but fails one of those tests; "
-              "variants added after seeing earlier results (the last three) were chosen on this same data, so treat their numbers as optimistic._"]
+              "variants added after seeing earlier results (the last three) were chosen on this same data, so treat their numbers as optimistic._",
+          "", f"_How sure: the 90% range comes from resampling the daily excess return in 3-month blocks 2,000 times; if it includes zero, "
+              f"this one 10-year history cannot rule out that the edge is luck, and 'robust edge' is withheld. 'Chance it is real' is the deflated "
+              f"Sharpe probability after {res.get('stats', {}).get('_trials', '?')} variants were tried (near 100% is convincing, 50% or less is what picking "
+              "the best of many produces by chance). The 3-year windows overlap heavily, so 'windows won' is a few semi-independent samples, not dozens._"]
     return "\n".join(L)
 
 
