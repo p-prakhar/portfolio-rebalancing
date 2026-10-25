@@ -44,6 +44,11 @@ class Profile:
     horizon_years: int = 15
     monthly_expenses_inr: float = 0.0
     emergency_months: int = 6
+    # backups that can soften (not replace) the cash buffer; all optional
+    health_cover_inr: float = 0.0       # family floater / employer group cover
+    term_cover_inr: float = 0.0         # term life cover (protects dependants, does not pay emergencies)
+    credit_card_limit_inr: float = 0.0  # total limit across cards
+    count_backups: bool = False         # the user agreed to keep a smaller buffer because of the above
     employer_ticker: str = ""
     employer_broker: str = ""          # e.g. etrade
     has_rsu: bool = False
@@ -181,6 +186,30 @@ def merge_lots(new_lots: list[dict], meta: dict | None = None, replace_symbols: 
     return path
 
 
+def emergency_months(p: Profile) -> tuple[int, str]:
+    """Months of expenses to keep liquid, and why. Backups only lower it if the user opted in, never below 3 months."""
+    base = p.emergency_months
+    notes, cut = [], 0
+    if p.health_cover_inr >= 500000:
+        notes.append(f"Health cover of Rs {p.health_cover_inr:,.0f} takes most hospital bills off the table")
+        cut += 1
+    elif p.health_cover_inr > 0:
+        notes.append(f"Health cover of Rs {p.health_cover_inr:,.0f} is thin for a serious illness; Rs 5 to 10 lakh is a common floor")
+    if p.credit_card_limit_inr >= p.monthly_expenses_inr > 0:
+        notes.append("card limits can bridge a gap of a few weeks, but card debt costs about 36 to 42% a year, so they are a bridge, never the fund")
+        cut += 1 if p.health_cover_inr >= 500000 else 0
+    if p.term_cover_inr > 0:
+        notes.append("term cover protects your family, not your cash flow, so it does not change the buffer")
+    if not notes:
+        return base, ("No insurance or card limits entered. Add them in the shell's profile command; they can justify a slightly "
+                      "smaller cash buffer.")
+    if not p.count_backups:
+        return base, ("You have backups (" + "; ".join(notes) + "). If you are comfortable relying on them, say yes to "
+                      "'count backups' in the shell's profile command and the target drops by up to 2 months, never below 3.")
+    months = max(3, base - min(cut, 2))
+    return months, "Lowered from " + f"{base} because " + "; ".join(notes) + "."
+
+
 def guardrails(p: Profile | None, others: list[OtherAsset], equity_value: float, total_tradable: float,
                employer_value: float, plan_equity_after: float | None = None) -> list[dict]:
     """Checks of the whole picture (tradable + other assets) against the profile. Each: level ok|warn, title, detail."""
@@ -209,8 +238,9 @@ def guardrails(p: Profile | None, others: list[OtherAsset], equity_value: float,
                                   "RSUs are taxed as salary at vest; selling later only adds capital gains on the move since vest."})
         if p.monthly_expenses_inr > 0:
             liquid = sum(o.value_inr for o in others if o.asset_class in ("cash", "debt") and o.liquid)
-            need = p.emergency_months * p.monthly_expenses_inr
+            months, why = emergency_months(p)
+            need = months * p.monthly_expenses_inr
             out.append({"level": "ok" if liquid >= need else "warn",
                         "title": f"Emergency fund Rs {liquid:,.0f} vs Rs {need:,.0f} target",
-                        "detail": f"{p.emergency_months} months of expenses should sit in cash/liquid debt, outside anything this engine rotates."})
+                        "detail": f"{months} months of expenses should sit in cash or liquid debt, outside anything this engine rotates. {why}"})
     return out

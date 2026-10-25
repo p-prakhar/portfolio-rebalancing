@@ -202,3 +202,14 @@ def test_switcher_verdict_is_cautious_when_winners_rotate():
     res = switcher.evaluate(_synthetic_navs("rotating"), load_settings())
     assert all(v.startswith("no reliable edge") for v in res["verdict"].values())
     assert "equal_weight" in switcher.report(res)
+
+
+def test_emergency_buffer_backups_are_opt_in_and_floored():
+    from pe.profile import Profile, emergency_months
+    p = Profile(monthly_expenses_inr=50000, emergency_months=6, health_cover_inr=1_000_000, credit_card_limit_inr=300000)
+    assert emergency_months(p)[0] == 6                      # not counted until the user agrees
+    p.count_backups = True
+    assert emergency_months(p)[0] == 4                      # health cover and a card bridge: up to 2 months less
+    p.emergency_months = 4
+    assert emergency_months(p)[0] == 3                      # never below 3
+    assert emergency_months(Profile(monthly_expenses_inr=1))[0] == 6

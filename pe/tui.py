@@ -26,6 +26,8 @@ except Exception:   # not installed or not a terminal: plain input() still works
     HAVE_PT = False
 
 COMMANDS = {
+    "next": "what should I do now? a short checklist from what is missing",
+    "setup": "guided first run: profile, income and imports, step by step",
     "status": "your portfolio, other investments and limits at a glance",
     "profile": "set age, risk appetite, employer stock",
     "income": "salary, RSU income, regime and carried-forward losses for exact tax",
@@ -47,10 +49,29 @@ COMMANDS = {
     "gold": "today's city gold rates",
     "silver": "today's city silver rates",
     "compare": "metals, semiconductors, India vs abroad: returns after cost and tax",
+    "simulate": "follow every strategy daily for 10, 5 and 2 years (a few minutes)",
+    "timing": "compare ways of deciding when to rebalance (slow)",
+    "switch": "test an automatic strategy switcher (run simulate first)",
+    "forecast": "test valuation and forecast overlays (slow)",
     "where": "where to find each number you need",
     "help": "list commands",
     "quit": "leave",
 }
+
+GROUPS = [
+    ("Start here", ["next", "setup", "status", "where"]),
+    ("About you", ["profile", "income"]),
+    ("Load what you own", ["import-kite", "import-etrade", "import-mf", "add-fd", "add-mf", "add-lot", "add-other"]),
+    ("See your savings", ["fds", "mf"]),
+    ("Decide", ["site", "check", "crash"]),
+    ("Research (slower)", ["backtest", "validate", "simulate", "compare", "crash-test", "timing", "switch", "forecast", "gold", "silver"]),
+    ("Shell", ["help", "quit"]),
+]
+EXAMPLES = """Examples
+  next          what to do now, based on what is still missing
+  setup         a guided first run: profile, income, then your imports, each one skippable
+  import-kite   then give a path like ~/Downloads/tradebook-*.csv (Tab completes paths)
+  site          builds the decision page and opens it in your browser"""
 
 KITE_GUIDE = """How to export from Zerodha Kite
   1. Open console.zerodha.com and log in (same login as Kite).
@@ -143,6 +164,18 @@ def do_profile() -> None:
     cur.risk = _choice("Risk appetite", list(RISK_LEVELS), cur.risk)
     cur.horizon_years = int(_number("Years until you need most of this money", cur.horizon_years, 1, 60))
     cur.monthly_expenses_inr = _number("Monthly expenses in Rs (0 to skip the emergency-fund check)", cur.monthly_expenses_inr)
+    if cur.monthly_expenses_inr > 0:
+        print("  Backups can make a smaller cash buffer reasonable. Leave any of these at 0 if you are not sure.")
+        cur.health_cover_inr = _number("Health insurance cover in Rs (employer group + your own; policy card or HR portal)", cur.health_cover_inr)
+        cur.term_cover_inr = _number("Term life cover in Rs (policy document)", cur.term_cover_inr)
+        cur.credit_card_limit_inr = _number("Total credit card limit in Rs (card app or statement)", cur.credit_card_limit_inr)
+        if cur.health_cover_inr or cur.credit_card_limit_inr:
+            from .profile import emergency_months
+            cur.count_backups = False
+            print("  " + emergency_months(cur)[1])
+            cur.count_backups = _choice("Count these backups and keep a smaller cash buffer?", ["no", "yes"], "no") == "yes"
+            m, why = emergency_months(cur)
+            print(f"  Cash buffer target: {m} months of expenses. {why if cur.count_backups else ''}")
     cur.has_rsu = _choice("Do you get RSUs/ESPP from a US-listed employer?", ["yes", "no"], "yes" if cur.has_rsu else "no") == "yes"
     if cur.has_rsu:
         cur.employer_ticker = _ask("Employer stock ticker (e.g. MSFT)", default=cur.employer_ticker).upper()
@@ -368,6 +401,82 @@ def do_status() -> None:
         print("\n(Showing the example holdings. Import yours to replace them.)")
 
 
+def _say(text: str, style: str = "") -> None:
+    try:
+        from rich.console import Console
+        Console().print(text, style=style or None, highlight=False)
+    except Exception:
+        print(text)
+
+
+def do_help() -> None:
+    for title, cmds in GROUPS:
+        _say(f"\n{title}", "bold")
+        for c in cmds:
+            if c in COMMANDS:
+                print(f"  {c:<14} {COMMANDS[c]}")
+    print("\n" + EXAMPLES)
+
+
+def todo() -> list[tuple[str, str]]:
+    """(command, reason) for each thing still missing, most useful first."""
+    from . import fd as F
+    items = []
+    prof = load_profile()
+    if prof is None:
+        items.append(("profile", "set your age and risk appetite so the report can check your limits"))
+    elif not (prof.gross_salary_inr or prof.rsu_perquisite_inr or prof.other_income_inr):
+        items.append(("income", "add your salary so tax is worked out at your real slab, not a guessed 30%"))
+    if not (ROOT / "config" / "holdings.yaml").exists():
+        items.append(("import-kite", "load your shares and ETFs with real purchase dates (the page shows example numbers until then)"))
+    if prof and prof.has_rsu:
+        from .config import load_holdings
+        if prof.employer_ticker and not any(l.symbol == prof.employer_ticker.upper() for l in load_holdings().lots):
+            items.append(("import-etrade", f"load your {prof.employer_ticker} RSU vests"))
+    try:
+        from .config import load_holdings
+        has_mf = any(l.symbol.startswith("MF") for l in load_holdings().lots)
+    except Exception:
+        has_mf = False
+    if not has_mf:
+        items.append(("import-mf", "load the mutual funds your advisor bought, from a CAS statement"))
+    if not F.load():
+        items.append(("add-fd", "add your SBI and IDFC FIRST fixed deposits"))
+    if prof and prof.monthly_expenses_inr and not (prof.health_cover_inr or prof.credit_card_limit_inr):
+        items.append(("profile", "optional: add insurance and card limits; they can justify a smaller cash buffer"))
+    page = ROOT / "reports" / "index.html"
+    import time
+    if not page.exists() or time.time() - page.stat().st_mtime > 7 * 86400:
+        items.append(("site", "build this week's decision page"))
+    return items
+
+
+def do_next() -> None:
+    items = todo()
+    if not items:
+        _say("Everything is loaded. Run `site` for today's decision, or `check` for the text version.", "green")
+        return
+    _say("Next steps, most useful first:", "bold")
+    for i, (c, why) in enumerate(items, 1):
+        print(f"  {i}. {c:<13} {why}")
+
+
+def do_setup() -> None:
+    print("Guided setup. Each step can be skipped by answering 'skip'. Ctrl+C stops at any point; what you entered so far is saved.\n")
+    steps = [("profile", do_profile, "Age, risk appetite, expenses, insurance and employer stock"),
+             ("income", do_income, "Salary, RSU income and tax regime, for exact tax"),
+             ("import-kite", do_import_kite, "Your Zerodha holdings with purchase dates"),
+             ("import-etrade", do_import_etrade, "Your RSU vests from E*TRADE"),
+             ("import-mf", do_import_mf, "Mutual funds from a CAS PDF"),
+             ("add-fd", do_add_fd, "Fixed deposits")]
+    for name, fn, what in steps:
+        a = _choice(f"{what}: do it now?", ["yes", "skip"], "yes")
+        if a == "yes":
+            fn()
+            print()
+    do_next()
+
+
 def _ns(**kw):
     base = dict(demo=False, refresh=False, holdings=None, policy=None, asof=None, days=365, open=False)
     base.update(kw)
@@ -379,9 +488,14 @@ def dispatch(cmd: str) -> bool:
     cmd = cmd.strip().lower()
     if cmd in ("quit", "exit", "q"):
         return False
-    if cmd in ("", "help", "?"):
-        for c, d in COMMANDS.items():
-            print(f"  {c:<14} {d}")
+    if cmd in ("help", "?"):
+        do_help()
+    elif cmd == "":
+        pass
+    elif cmd == "next":
+        do_next()
+    elif cmd == "setup":
+        do_setup()
     elif cmd == "profile":
         do_profile()
     elif cmd == "income":
@@ -424,6 +538,9 @@ def dispatch(cmd: str) -> bool:
         M.cmd_validate(Namespace(years=10, window_years=3, refresh=False))
     elif cmd == "compare":
         M.cmd_compare(None)
+    elif cmd in ("simulate", "timing", "switch", "forecast"):
+        sys.argv = ["main.py"] + ({"simulate": ["simulate-daily", "--all-strategies"]}.get(cmd) or [cmd])
+        M.main()
     elif cmd == "silver":
         sys.argv = ["main.py", "gold-prices", "--metal", "silver"]
         M.main()
@@ -431,14 +548,20 @@ def dispatch(cmd: str) -> bool:
         sys.argv = ["main.py", "gold-prices"]
         M.main()
     else:
-        print(f"  Unknown command '{cmd}'. Type help.")
+        import difflib
+        near = difflib.get_close_matches(cmd, list(COMMANDS), n=2, cutoff=0.5)
+        print(f"  '{cmd}' is not a command." + (f" Did you mean {' or '.join(near)}?" if near else "") + " Type help for the list.")
     return True
 
 
 def run_shell() -> None:
-    print("Portfolio engine. Type a command (Tab completes, Up recalls); `help` lists them.\n")
-    if not (ROOT / "config" / "holdings.yaml").exists():
-        print("First time? Suggested order: profile -> income -> import-kite -> import-etrade (RSUs) -> import-mf -> add-fd -> add-other -> site\n")
+    _say("Portfolio engine", "bold")
+    print("Type a command and press Enter. Tab completes, Up recalls, `help` lists everything.\n")
+    if load_profile() is None and not (ROOT / "config" / "holdings.yaml").exists():
+        print("Looks like a first run. Type `setup` for a guided start, or `next` any time to see what is missing.\n")
+    else:
+        do_next()
+        print()
     comp = FuzzyCompleter(WordCompleter(list(COMMANDS), meta_dict=COMMANDS, ignore_case=True)) if HAVE_PT else None
     (ROOT / "state").mkdir(exist_ok=True)
     sess = PromptSession(history=FileHistory(str(ROOT / "state" / "history")), completer=comp, complete_while_typing=True) if HAVE_PT else None
@@ -451,6 +574,16 @@ def run_shell() -> None:
             if not dispatch(line):
                 break
         except KeyboardInterrupt:
-            print("\n(cancelled)")
-        except Exception as exc:   # keep the shell alive; show the cause
-            print(f"  Error: {type(exc).__name__}: {exc}")
+            print("\n(cancelled; nothing after this point was saved)")
+        except SystemExit as exc:
+            print(f"  {exc}")
+        except FileNotFoundError as exc:
+            print(f"  Could not find {exc.filename}. Check the path; Tab completes it.")
+        except Exception as exc:   # keep the shell alive; say what failed in one line, details go to state/shell_errors.log
+            import traceback
+            (ROOT / "state").mkdir(exist_ok=True)
+            with open(ROOT / "state" / "shell_errors.log", "a") as f:
+                f.write(traceback.format_exc() + "\n")
+            msg = str(exc).splitlines()[0][:200] if str(exc) else type(exc).__name__
+            hint = " Check your internet connection." if "connect" in msg.lower() or "timed out" in msg.lower() else ""
+            print(f"  That did not work: {msg}.{hint} Details are in state/shell_errors.log.")
