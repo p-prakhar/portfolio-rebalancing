@@ -45,10 +45,26 @@ Whipsaw defences: families must agree, a price drop alone cannot raise the level
 ## How to use
 
 - `python main.py crash`: today's level, each signal, the exit drill
-- `python main.py run` and `site`: the guard is on by default (`strategy.crash.enabled`); the report and the first tab show it, and when it fires the plan contains the cuts
+- `python main.py site`: the first tab shows the signals as warnings. The guard is OFF by default (`strategy.crash.enabled: false`); set it to `true` and live plans will contain the cuts
 - `python main.py crash-test`: 10-year replay with every fall and every false alarm after costs and tax (needs Yahoo data; run it on your own machine)
-- Turn it off with `strategy.crash.enabled: false`
+- `python main.py crash-test --variants`: the pre-declared configuration study below
+
+## Real-data results (Oct 2016 to Oct 2026, after tax and costs)
+
+Guard on buy & hold: 8.9%/yr vs 10.4%, worst fall -14.0% vs -36.3%. Of 8 alarms, 1 (Feb 2020) was followed by a further 10% fall; 2018 and 2024-25 were missed or only helped by luck.
+
+On the default core strategy (`core_xs`, 12.7%/yr, worst fall -23.3%), four guard configurations were declared before any run (as shipped; crisis only; crisis only keeping half; crisis only returning after 5 days):
+
+| configuration | CAGR | max drawdown | windows won | calendar years won |
+|---|---|---|---|---|
+| no guard | 12.7% | -23.3% | | |
+| A. as shipped | 9.8% | -18.4% | 0 of 8 | 2 of 10 |
+| B. crisis only | 9.9% | -18.7% | 0 of 8 | 2 of 10 |
+| C. crisis only, keep half | 10.9% | -19.8% | 1 of 8 | 2 of 10 |
+| D. crisis only, 5-day return | 10.3% | -20.0% | 0 of 8 | 2 of 10 |
+
+None added return, so the guard ships switched off. It is drawdown insurance that costs about 2 to 3 points a year: on if you value sleeping through a crash over the last rupee, off if the goal is the most money.
 
 ## What we do not know yet
 
-The parameters are textbook values chosen before any backtest and not tuned. They have only been exercised on synthetic price paths (a code check, not evidence). Run `crash-test` on real data before trusting the numbers. Crashes are rare, so even 10 years holds only a handful of falls: read the result as case studies. True valuation (PE, CAPE) and fund-flow data are not free to fetch reliably, so valuation enters only through the run-up flag. The cost to expect is false alarms: markets fall 10% far more often than they crash.
+The parameters are textbook values chosen before any backtest and not tuned. Crashes are rare, so even 10 years holds only a handful of falls: read the result as case studies. True valuation (PE, CAPE) and fund-flow data are not free to fetch reliably, so valuation enters only through the run-up flag. The cost to expect is false alarms: markets fall 10% far more often than they crash.
