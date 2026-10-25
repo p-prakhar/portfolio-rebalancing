@@ -122,6 +122,15 @@ strategy:
     overlay: dual_momentum       # none | dual_momentum : cut equity when the market trend breaks
     risk_off_cut: 0.5
     exit_to: CASH
+  # --- valuation / forecast overlays (pe/valuation.py): fixed before any result was seen, do not tune on reported windows ---
+  valuation:
+    cache_dir: data/valuation
+    min_history_days: 750          # no signal until this many daily observations exist
+    floor: 0.5                     # India equity is never cut below half its base weight, never levered
+    bond_lag_days: 60
+    pe: {start_pct: 0.70, full_cut_pct: 0.95}     # cut starts at the 70th percentile of own history, full at the 95th
+    spread: {start_z: -1.0, full_cut_z: -2.0}     # earnings yield minus 10y yield, expanding z-score
+    fcst: {min_train_days: 1250, cut_below: 0.0}  # cut when forecast 1y return is below cash
   # --- crash-aware policies (see docs/THEORIES.md) ---
   trend_vol:                     # Faber-style 10-month trend filter per asset + portfolio volatility targeting
     assets: [NIFTYBEES, MID150BEES, LOWVOLIETF, GOLDBEES, SILVERBEES, SPY, EFA, EEM, TLT]

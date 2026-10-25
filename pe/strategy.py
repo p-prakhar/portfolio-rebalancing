@@ -64,6 +64,8 @@ def build_target(px: pd.DataFrame, vix: pd.Series | None, settings: Settings, po
                  held_weights: dict[str, float] | None = None) -> Target:
     st = settings.strategy
     policy = policy or st["policy"]
+    if "+" in policy:      # valuation / forecast overlay on any base policy, e.g. "core_xs+pe"
+        return _with_valuation(px, vix, settings, policy, held_weights)
     dm_cfg = st["dual_momentum"]
     reg = regime(px, vix, dm_cfg["equity"])
     dm = dual_momentum(px, dm_cfg["equity"], dm_cfg["gold"], dm_cfg["cash"], dm_cfg["lookback"], dm_cfg["sma"])
@@ -294,3 +296,32 @@ def _custom(px, settings, why, dm, reg, held: dict[str, float]) -> Target:
     if not exits and freed <= 1e-9:
         why.append("Custom policy: no holding shows enough converging weakness to sell; keep everything.")
     return Target(w, risk_off=risk, why=why, scores=xs, dual=dm, regime=reg, review=review, risk_reason="; ".join(reasons))
+
+
+def _with_valuation(px, vix, settings, policy: str, held_weights) -> Target:
+    """Base policy, then cut India-equity weight by the valuation/forecast scale factor; the cut goes to cash."""
+    from .valuation import scale_for
+    base_name, kind = policy.split("+", 1)
+    if base_name == "nifty":      # pure test of the signal: Nifty 50 ETF scaled up and down, remainder cash
+        sym = settings.strategy["dual_momentum"]["equity"]
+        base = Target({sym: 1.0}, why=[f"Nifty-only baseline in {sym}."], regime=regime(px, vix, sym))
+    else:
+        base = build_target(px, vix, settings, base_name, held_weights)
+    sig = settings.raw.get("_valuation_signals")
+    if sig is None or base.weights is None:
+        return base
+    f = scale_for(sig, kind, px.index[-1])
+    if f >= 0.999:
+        return base
+    w = dict(base.weights)
+    cut = 0.0
+    for s in list(w):
+        if settings.assets[s].sleeve == "india_equity":
+            cut += w[s] * (1 - f)
+            w[s] *= f
+    w["CASH"] = w.get("CASH", 0.0) + cut
+    base.weights = w
+    base.risk_off = True
+    base.risk_reason = f"{kind} signal cuts India equity to {f:.0%}"
+    base.why.append(f"Valuation overlay ({kind}): India equity scaled to {f:.0%} of its base weight; the difference sits in cash.")
+    return base
