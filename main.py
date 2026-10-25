@@ -280,6 +280,15 @@ def cmd_crash_test(args):
     from pe import crash_backtest as cb
     from pe.report import save
     settings = load_settings()
+    if args.variants:
+        res = cb.study(args.years, refresh=args.refresh)
+        text = cb.study_report(res)
+        (ROOT / settings["report"]["out_dir"]).mkdir(exist_ok=True)
+        (ROOT / settings["report"]["out_dir"] / "crash_variants.json").write_text(json.dumps(res, default=str))
+        p = save(text, settings, "crash_variants.md")
+        show_md(text)
+        print(f"\nSaved {p}")
+        return
     if args.demo:
         px, vix = cb.synthetic_panel(settings, args.scenario)
         res = cb.analyse(settings, px, vix, args.years, 1_000_000)
@@ -353,6 +362,7 @@ def main():
     ct = sub.add_parser("crash-test", help="replay 10 years: how the crash guard did in each fall, and what its false alarms cost (slow)")
     ct.add_argument("--years", type=int, default=10); ct.add_argument("--refresh", action="store_true")
     ct.add_argument("--demo", action="store_true", help="synthetic prices (code check only)")
+    ct.add_argument("--variants", action="store_true", help="instead: try the pre-declared guard configurations on the core strategy (slow)")
     ct.add_argument("--scenario", default="bubble_burst", choices=["steady", "bubble_burst", "v_crash", "chop", "grind_bear"])
     sub.add_parser("compare", help="compare metals, semiconductors and other assets in India and abroad, after cost and tax")
     sub.add_parser("shell", help="guided interactive shell with autocomplete: profile, imports, check, site")

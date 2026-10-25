@@ -202,3 +202,101 @@ def synthetic_panel(settings: Settings, kind: str, seed: int = 3) -> tuple[pd.Da
     comp = pd.Series(mkt, index=idx).rolling(20).std() * np.sqrt(252)
     vix = (10 + 90 * comp.fillna(0.14).ewm(span=15).mean()).clip(10, 85)
     return df, vix
+
+
+# Guard configurations declared BEFORE looking at any result, so the number of trials is known (4, counting the shipped one).
+# Each overrides strategy.crash in settings. Judged against the core strategy WITHOUT the guard.
+TRIALS = [
+    ("A. as shipped", {}),
+    ("B. crisis only (no cut at elevated)", {"keep": {2: 1.0, 3: 0.25}}),
+    ("C. crisis only, keep half", {"keep": {2: 1.0, 3: 0.5}}),
+    ("D. crisis only, back in after 5 days", {"keep": {2: 1.0, 3: 0.25}, "exit_days": 5}),
+]
+BASE_POLICY = "core_xs"
+
+
+def study(years: int = 10, lump: float = 1_000_000, window_years: int = 3, step_months: int = 12, refresh: bool = False, data=None) -> dict:
+    """Does any pre-declared guard configuration beat the core strategy without a guard, over the full period,
+    in rolling windows and in calendar years? Core strategy = settings default (core_xs)."""
+    import copy
+
+    from .validate import _cagr, load_long, run_window
+    s, px, vix, closes = data or load_long(years, refresh)
+    fx = closes[s["data"]["fx_ticker"]].reindex(px.index).ffill() if s["data"]["fx_ticker"] in closes else None
+    end = px.index[-1]
+    full_start = max(px.index[0] + pd.DateOffset(months=14), end - pd.DateOffset(years=years))
+    wins, t = [], full_start
+    while t + pd.DateOffset(years=window_years) <= end + pd.Timedelta(days=5):
+        wins.append((t, min(t + pd.DateOffset(years=window_years), end)))
+        t += pd.DateOffset(months=step_months)
+    base_v = [v for v in VARIANTS if v[0] in ("Buy & hold (your current portfolio)", "Core-satellite without core overlay")]
+    hold, core = base_v[0][0], base_v[1][0]
+
+    def trial_settings(over):
+        ts = copy.deepcopy(s)
+        ts.strategy["crash"].update(over)
+        return ts
+    out = {"start": str(full_start.date()), "end": str(end.date()), "trials": len(TRIALS), "window_years": window_years, "rows": {}}
+    names = [core, hold] + [n for n, _ in TRIALS]
+    per = {n: {"win_excess": [], "years": None} for n in names}
+    curves_by = {}
+    for label, spans in (("full", [(full_start, end)]), ("windows", wins)):
+        for a, b in spans:
+            res = run_window(s, px, vix, fx, a, b, lump, base_v)
+            if res is None:
+                continue
+            c0, tab0, _ = res
+            wy = (b - a).days / 365.25
+            core_r = _cagr(tab0.loc[core, "after_tax_return_liquidated"], wy)
+            res_t = {}
+            for n, over in TRIALS:
+                ts = trial_settings(over)
+                v = [(n, BASE_POLICY + "+guard", "immediate", True)]
+                c1, tab1, _ = run_window(ts, px, vix, fx, a, b, lump, v)
+                res_t[n] = (c1[n], tab1.loc[n])
+            if label == "full":
+                yrs = wy
+                for nm, r in tab0.iterrows():
+                    per[nm]["full"] = {"cagr": _cagr(r["after_tax_return_liquidated"], yrs), "mdd": r["max_drawdown"], "tax": r["taxes_paid"], "costs": r["costs"]}
+                    curves_by[nm] = c0[nm]
+                for n, (cv, r) in res_t.items():
+                    per[n]["full"] = {"cagr": _cagr(r["after_tax_return_liquidated"], yrs), "mdd": r["max_drawdown"], "tax": r["taxes_paid"], "costs": r["costs"]}
+                    curves_by[n] = cv
+            else:
+                for n, (cv, r) in res_t.items():
+                    per[n]["win_excess"].append(_cagr(r["after_tax_return_liquidated"], wy) - core_r)
+    ann = {n: c.groupby(c.index.year).last().pct_change().dropna() for n, c in curves_by.items()}
+    for n, _ in TRIALS:
+        ex = np.array(per[n]["win_excess"])
+        yr = (ann[n] - ann[core]).dropna()
+        out["rows"][n] = {**per[n]["full"], "windows": len(ex), "windows_won": float((ex > 0).mean()) if len(ex) else None,
+                          "median_excess": float(np.median(ex)) if len(ex) else None, "worst_excess": float(ex.min()) if len(ex) else None,
+                          "years_won": float((yr > 0).mean()), "years": len(yr), "year_detail": {int(k): float(v) for k, v in yr.items()}}
+    for n in (core, hold):
+        out["rows"][n] = per[n]["full"]
+    out["core"], out["hold"] = core, hold
+    return out
+
+
+def study_report(r: dict) -> str:
+    core, hold = r["core"], r["hold"]
+    L = [f"# Crash guard variants on the core strategy: {r['start']} to {r['end']}", "",
+         f"Core strategy = `{BASE_POLICY}` (the default). {r['trials']} guard configurations were declared before any run, and the numbers below are the only trials, "
+         f"so the best of them is flattered by about one trial's worth of luck. Excess = guard minus the same strategy with no guard, after tax, "
+         f"rolling {r['window_years']}-year windows and calendar years.", "",
+         "| configuration | CAGR after tax | max drawdown | tax + costs | windows won | median excess/yr | worst window | calendar years won |", "|---|---|---|---|---|---|---|---|"]
+    for n in (hold, core):
+        x = r["rows"][n]
+        L.append(f"| {n} | {x['cagr']:.1%} | {x['mdd']:.1%} | {x['tax'] + x['costs']:,.0f} | - | - | - | - |")
+    for n, x in r["rows"].items():
+        if n in (hold, core):
+            continue
+        L.append(f"| {n} | {x['cagr']:.1%} | {x['mdd']:.1%} | {x['tax'] + x['costs']:,.0f} | {x['windows_won']:.0%} of {x['windows']} | {x['median_excess']:+.1%} | {x['worst_excess']:+.1%} | {x['years_won']:.0%} of {x['years']} |")
+    best = max((n for n in r["rows"] if n not in (hold, core)), key=lambda n: r["rows"][n]["cagr"])
+    b, c = r["rows"][best], r["rows"][core]
+    adds = b["cagr"] > c["cagr"] and (b["windows_won"] or 0) >= 0.6 and (b["median_excess"] or -1) > 0
+    L += ["", "## Verdict", "",
+          (f"`{best}` adds return over the unguarded core ({b['cagr'] - c['cagr']:+.1%}/yr, wins {b['windows_won']:.0%} of windows). Even so, it is the best of {r['trials']} trials: treat as promising, not proven."
+           if adds else f"No configuration beat the unguarded core strategy on return and windows (best was `{best}` at {b['cagr']:.1%} vs {c['cagr']:.1%}). "
+                        "If the goal is maximum money, leave the guard off by default and keep it as an opt-in for drawdown protection.")]
+    return "\n".join(L)
