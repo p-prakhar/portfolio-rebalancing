@@ -331,6 +331,12 @@ def cmd_validate(args):
     print("\nSaved reports/validation.md and validation.json")
 
 
+def cmd_forecast(args):
+    from pe import forecast_study
+    forecast_study.run(years=args.years, refresh=args.refresh)
+    print((ROOT / "reports" / "forecast_study.md").read_text())
+
+
 def main():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -367,6 +373,9 @@ def main():
     tp = sub.add_parser("timing", help="compare ways of deciding when to rebalance (bands, calendar, fill rules) with costs, tax and bootstrap")
     tp.add_argument("--years", type=int, default=10); tp.add_argument("--demo", action="store_true", help="synthetic prices (code check only)")
     tp.add_argument("--refresh", action="store_true")
+    fp = sub.add_parser("forecast", help="test valuation (P/E, earnings yield vs bonds) and forecast overlays against the strategies (slow, needs network)")
+    fp.add_argument("--years", type=int, default=10)
+    fp.add_argument("--refresh", action="store_true")
     sub.add_parser("compare", help="compare metals, semiconductors and other assets in India and abroad, after cost and tax")
     sub.add_parser("shell", help="guided interactive shell with autocomplete: profile, imports, check, site")
     sub.add_parser("reset-window")
@@ -418,6 +427,8 @@ def main():
         timing_sweep.save(res)
         show_md(timing_sweep.report(res))
         print("\nSaved reports/timing.md")
+    elif args.cmd == "forecast":
+        cmd_forecast(args)
     elif args.cmd == "compare":
         cmd_compare(args)
     elif args.cmd == "shell":
