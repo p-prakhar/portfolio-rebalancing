@@ -112,7 +112,7 @@ def cmd_run(args):
     plan = make_plan(px.index[-1], h.lots, h.cash_inr, px, vix, settings, _fy_realised(h, prof),
                      lrs_used=h.lrs_remitted_this_fy_inr, usd_inr=usd)
     timing = timing_step(plan, px, settings) if not args.demo else []
-    text = live_report(plan, settings, timing, args.demo, note)
+    text = live_report(plan, settings, timing, args.demo, note, px)
     p = save(text, settings, "latest.md")
     save(text, settings, f"check_{plan.as_of}.md")
     show_md(text)
