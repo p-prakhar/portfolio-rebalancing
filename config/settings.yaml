@@ -25,6 +25,7 @@ tax:
     foreign: 24                  # US shares/ETFs held via IBKR etc.
     in_debt: null                # specified MF / liquid ETF: always slab, no LT
     mf_other: 24                 # unlisted non-equity mutual funds (gold/international FoFs, hybrids under 65% equity) bought after 1 Apr 2025
+  lot_method: fifo               # fifo = oldest units are sold first (what depositories and the ITR apply). 'specific' only if every lot is in its own demat account/folio
   discount_rate: 0.07            # used to value tax deferral
   default_deferral_years: 5      # if you don't sell now, roughly when would you?
   lrs_tcs_threshold: 1000000     # LRS remittances above this per FY attract TCS
