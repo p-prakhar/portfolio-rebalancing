@@ -21,7 +21,7 @@ import pandas as pd
 from .backtest import VARIANTS, run_all
 from .config import ROOT, Lot, Settings, load_settings
 from .data import build_prices, fetch_closes
-from .stats import bootstrap_excess, deflated_sharpe
+from .stats import bootstrap_daily, deflated_sharpe
 
 
 def load_long(years: int = 10, refresh: bool = False):
@@ -35,16 +35,28 @@ def load_long(years: int = 10, refresh: bool = False):
     return s, px, vix, closes
 
 
-def significance(curves: pd.DataFrame, base: str) -> dict:
+def significance(curves: pd.DataFrame, base: str, full: dict | None = None, years: float | None = None) -> dict:
     """Per variant: bootstrap range of annual excess over the baseline, and the deflated-Sharpe probability that it
-    survives having tried len(curves.columns) - 1 alternatives."""
+    survives having tried len(curves.columns) - 1 alternatives.
+
+    The curves are portfolio values before tax on a final sale, so a strategy that books gains looks worse on them
+    and one that defers tax looks better. The point estimate is therefore taken from the after-tax CAGRs in `full`
+    and the daily excess series is shifted by the same amount, keeping the bootstrap's spread but not its bias."""
     rets = np.log(curves).diff().dropna()
-    ex = {n: (rets[n] - rets[base]).to_numpy() for n in curves.columns if n != base}
+    ex = {}
+    for n in curves.columns:
+        if n == base:
+            continue
+        e = (rets[n] - rets[base]).to_numpy()
+        if full and years and n in full and base in full:
+            target = np.log1p(full[n]["cagr_after_tax"]) - np.log1p(full[base]["cagr_after_tax"])
+            e = e + (target - e.mean() * 252) / 252
+        ex[n] = e
     trial_sr = [float(e.mean() / e.std(ddof=1)) for e in ex.values() if e.std(ddof=1) > 0]
     out = {}
-    for n in ex:
-        b = bootstrap_excess(curves[n].to_numpy(), curves[base].to_numpy())
-        b["deflated_sharpe"] = deflated_sharpe(ex[n], trial_sr)
+    for n, e in ex.items():
+        b = bootstrap_daily(e)
+        b["deflated_sharpe"] = deflated_sharpe(e, trial_sr)
         out[n] = b
     out["_trials"] = len(ex)
     return out
@@ -86,7 +98,7 @@ def validate(years: int = 10, lump: float = 1_000_000, window_years: int = 3, st
                            "taxes_paid": r["taxes_paid"], "costs": r["costs"], "turnover_x": r["turnover_x"],
                            "volatility": r["volatility"], "sharpe": r["sharpe"]}
     out["full"] = full_rows
-    out["stats"] = significance(curves, base)
+    out["stats"] = significance(curves, base, full_rows, yrs)
     out["curves"] = {"dates": [str(d.date()) for d in curves.index[::5]],
                      "series": {c: [round(float(v), 0) for v in curves[c].iloc[::5]] for c in curves.columns}}
 
