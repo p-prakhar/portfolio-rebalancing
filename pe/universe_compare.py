@@ -50,6 +50,13 @@ INFO: dict[str, tuple[str, str, str]] = {
     "KAYNES": ("India tech and electronics", "India", "Kite; single stock, electronics and chip packaging push"),
     "HNGSNGBEES": ("Other markets", "India", "Kite; Hang Seng ETF"),
     "SPY": ("Benchmark", "US", "IBKR via LRS"),
+    "CSPX": ("Global equity via UCITS", "Ireland / London", "IBKR via LRS; S&P 500, accumulating, no US estate-tax exposure"),
+    "CNDX": ("Global equity via UCITS", "Ireland / London", "IBKR via LRS; Nasdaq 100, accumulating"),
+    "IWDA": ("Global equity via UCITS", "Ireland / London", "IBKR via LRS; developed world, accumulating"),
+    "VWRA": ("Global equity via UCITS", "Ireland / London", "IBKR via LRS; one-fund world incl. emerging markets"),
+    "EIMI": ("Global equity via UCITS", "Ireland / London", "IBKR via LRS; emerging markets incl. small caps"),
+    "IGLN": ("Global equity via UCITS", "Ireland / London", "IBKR via LRS; physical gold ETC, USD line"),
+    "EWJ": ("Other markets", "US", "IBKR via LRS; Japan, US-domiciled so US estate tax applies"),
     "EEM": ("Other markets", "US", "IBKR via LRS"),
 }
 NOTES = {
@@ -85,7 +92,7 @@ def compare(px: pd.DataFrame, settings: Settings, usd_inr: float | None = None, 
         c5 = _cagr(s, years)
         net5 = None
         if c5 is not None:
-            end = amount * (1 + c5) ** years
+            end = amount * (1 + c5) ** years   # prices already net of dividend tax drag (pe/global_markets.py)
             gain = max(0.0, end - amount)
             bucket = "eq_lt" if a.tax_class == "in_equity" else "oth_lt"
             tax = gain * effective_rate(bucket, settings)

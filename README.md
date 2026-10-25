@@ -52,6 +52,7 @@ python -m pytest -q tests    # tax engine / stopping rule / planner tests
   assets:
     RELIANCE: {ticker: 500325.BO}                 # BSE ticker instead
     AAPL: {currency: USD}                         # US stock via IBKR: 24-month LT rule, IBKR costs
+    VUAA:  {ticker: VUAA.L, currency: USD, venue: ibkr_ucits, domicile: IE, accumulating: true}   # Irish UCITS ETF, USD line only (a GBP or EUR line needs its own FX); see docs/GLOBAL_INVESTING.md
     SGBAUG28: {tax_class: in_other, venue: nse_nonequity_etf}
   ```
 - Run with `--policy custom` to keep what you own and only sell on converging evidence:
@@ -149,6 +150,8 @@ pe/backtest.py         walk-forward simulation with lots, FY tax payments, costs
 pe/report.py           Markdown reports
 docs/THEORIES.md       what works in turbulent markets and why
 docs/EDGES.md          small-investor edges and traps
+docs/GLOBAL_INVESTING.md  step-by-step IBKR guide for an Indian resident: LRS, TCS, UCITS, tax filing
+docs/GLOBAL_MARKETS.md    which foreign markets are in the universe, which are excluded, and why
 ```
 
 ## Known limits
