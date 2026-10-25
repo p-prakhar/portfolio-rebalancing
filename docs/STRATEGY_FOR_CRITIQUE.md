@@ -6,7 +6,7 @@ _Version of 25 Oct 2026. Written to be read on its own, with no access to the co
 
 You are asked to act as a hostile but fair reviewer: a quantitative researcher, an Indian chartered accountant and a retail-investing sceptic in one. Find what is wrong, overfitted, mis-specified, illegal, misleading or missing. Section 15 lists the questions I most want answered. Please separate (a) errors of fact (tax law, costs, market rules), (b) errors of method (backtest, statistics), and (c) judgement calls where you would decide differently. Cite sources where you can. If you think the project should be reduced to "buy a Nifty index fund and harvest the tax exemption each year", say so and say why.
 
-**Status of the evidence, in one paragraph.** The engine is decision support: it never places orders. The 10-year results below come from one data source (Yahoo Finance), one market (mostly India, plus a few US ETFs), strategies that were designed and screened on that same history, and today's tax rules applied to all years. The crash guard now has a real-data replay (Section 8). The strategy switcher and the valuation and forecast overlays have been built and unit-tested on synthetic data only and have **no real-data results yet** (runs in progress). Treat every performance number as optimistic until shown otherwise.
+**Status of the evidence, in one paragraph.** The engine is decision support: it never places orders. The 10-year results below come from one data source (Yahoo Finance, plus the NSE archive for P/E history), one market (mostly India, plus a few US ETFs), strategies that were designed and screened on that same history, and today's tax rules applied to all years. Every add-on tested so far (crash guard, strategy switcher, valuation and forecast overlays) failed to beat the simple core strategy after tax on real data, and the document reports those negative results in full. The timing-rule study (Section 9) is built and merged but its real-data numbers are not included here.
 
 ---
 
@@ -55,7 +55,7 @@ Defined in a config file; each instrument has a tax class, a venue (cost model),
 - **Wider "explore" universe, `rotate: false`:** silver, platinum, copper, base metals, gold miners, lithium, rare earths, uranium, broad commodities, semiconductor ETFs, semiconductor stocks (US and Indian), Indian metals stocks. Allowing the rotation to pick from these made the 10-year result slightly worse (more turnover and tax), so they are only compared, not traded by default.
 - **Cash:** a synthetic sleeve at 6.5% a year, modelled as an arbitrage fund.
 - **Other assets handled outside the rotation:** bank fixed deposits (after-tax yield and early-break cost for a few banks), mutual funds from a consolidated account statement (regular vs direct plan cost gap), and a comparison of about 45 asset classes (flats, plots, farmland by state, a Dubai flat, physical gold, PPF/EPF/NPS, REITs and so on) as yearly after-tax cash-flow models under base, bear and bull scenarios. Those models have not been validated against any data and are explicitly illustrative.
-- **Under construction, not merged at the time of writing:** a broader global universe through IBKR with other countries' markets, to be added only where the Indian tax treatment and the practical purchase route are well understood.
+- **Global universe (merged):** added only where (1) the Indian tax treatment is documented well enough to model and (2) a resident can buy it through IBKR under LRS in a USD-quoted line. In: US large cap and Nasdaq 100 (US-domiciled and Irish UCITS versions), developed world, all-world, Japan (US-listed), emerging markets, gold, long Treasuries. Out, with reasons: direct stocks in Europe, the UK (0.5% stamp duty), Japan, Hong Kong and China, Singapore, Canada, Australia (country-specific dividend withholding, local currencies, paperwork), the Gulf (access not verified), sanctioned markets, crypto, derivatives and leveraged products. All are `rotate: false` and unvalidated. US-domiciled funds carry a yearly dividend-tax drag in the model; Irish accumulating lines do not. A step-by-step IBKR buying guide (account, LRS, TCS, FX, W-8BEN, Form 67, Schedule FA, estate-tax threshold) exists in the repo; several of its points are marked "verify" because they rest on a single source.
 
 ## 5. The strategies (policies)
 
@@ -74,7 +74,7 @@ Notation: P_t is price, r the return over a lookback, sigma the annualised volat
 9. **Half Nifty, half risk parity.**
 10. **Custom (keep what you hold).** Sells a holding only when at least 2 of 3 independent flags agree: technical downtrend, volatility trailing stop breached, weak momentum; trims single stocks above 10%; cuts equity by 50% when the market trend overlay is risk-off.
 11. **Technical layer (reporting, not trading on its own).** 200/50-day trend and cross, 12-1 month momentum, distance from 52-week high, RSI, MACD, Bollinger. Only trend, momentum and 52-week-high drive verdicts; oscillators appear as timing hints because their evidence is weak.
-12. **Valuation and forecast overlays (new, branch only).** Cut India equity weight, never below 50% of base and never levered, using: Nifty P/E percentile within its own expanding history (cut starts at the 70th percentile, full cut at the 95th); earnings yield minus the 10-year yield as an expanding z-score (cut from z = -1 to full at z = -2); and a walk-forward OLS forecast of next-year Nifty excess return from P/E percentile and 12-month momentum (cut when the forecast is below zero), refit monthly using only outcomes already known. Thresholds were set before any result was seen.
+12. **Valuation and forecast overlays (tested, rejected, not in the live engine).** Cut India equity weight, never below 50% of base and never levered, using: Nifty P/E percentile within its own expanding history (cut starts at the 70th percentile, full cut at the 95th); earnings yield minus the 10-year yield as an expanding z-score (cut from z = -1 to full at z = -2); and a walk-forward OLS forecast of next-year Nifty excess return from P/E percentile and 12-month momentum (cut when the forecast is below zero), refit monthly using only outcomes already known. Thresholds were set before any result was seen.
 
 Design intent: a pre-registered, finite set; parameters are textbook values and were not tuned on the reported windows.
 
@@ -115,7 +115,7 @@ Itemised per venue (config file):
 
 **The hurdle for a rotation.** Expected benefit B = min(alpha_cap, shrink × trailing momentum spread) × horizon, with shrink 0.25, alpha_cap 12% a year and horizon 6 months. Execute if B ≥ switch_safety × (costs + economic tax cost), with switch_safety 1.25. Drifts under 3% of the portfolio are ignored. Risk-off exits skip the hurdle. These constants (0.25, 12%, 6 months, 1.25, 3%) are judgement, not estimates.
 
-## 8. The crash guard (open pull request) and its 10-year result
+## 8. The crash guard (merged, off by default) and its 10-year result
 
 An overlay on any policy. Purpose: leave quickly and cheaply when a bubble bursts, whatever the story. Six daily signal families on a market proxy (60% Nifty ETF, 40% S&P 500):
 
@@ -157,7 +157,9 @@ Days at each level over the ten years: calm 1,721, watch 380, elevated 172, cris
 
 **Whipsaw ledger:** the guard reached elevated or worse 8 times. Only 1 was justified (Feb 2020: a further -27.4% followed within 120 days). The other 7 were false alarms, during which the market *rose* 3% to 9% while the investor was out (for example +7.6% during May to Sep 2022 and +8.8% during Mar to May 2025).
 
-**Reading:** the guard cuts the worst drawdown from -36% to -14% and costs 1.4 points a year after tax plus about Rs 9,000 of extra tax and fees. On the core-satellite default it reduces the drawdown from -23% to -18% but gives up 2.9 points a year, a poor trade. With only one large crash in the sample, the benefit rests on a single episode (COVID 2020); two falls of about 12% (2018 and 2024 to 2025) were missed entirely; and 7 of 8 alarms were false. I do not regard this as evidence that the guard is worth running, only as a cost-of-insurance estimate. The guard's own audit of the older strategies found that the default never sold its core, checks were monthly, and the regime label was decoration.
+**Reading:** the guard cuts the worst drawdown from -36% to -14% and costs 1.4 points a year after tax plus about Rs 9,000 of extra tax and fees. On the core-satellite default it reduces the drawdown from -23% to -18% but gives up 2.9 points a year, a poor trade. With only one large crash in the sample, the benefit rests on a single episode (COVID 2020); two falls of about 12% (2018 and 2024 to 2025) were missed entirely; and 7 of 8 alarms were false. I do not regard this as evidence that the guard is worth running, only as a cost-of-insurance estimate.
+
+**Variant study and decision.** Four pre-declared guard configurations were then run on the default `core_xs` strategy (12.7% a year, worst fall -23.3%). All four lost money: 9.8%, 9.9%, 10.9% and 10.3% a year, each winning at most 1 of 8 rolling windows and 2 of 10 calendar years, in exchange for a shallower worst fall of about -18% to -20%. The guard therefore ships **off by default**; the report still shows its signals as warnings, and turning it on is a deliberate purchase of drawdown insurance costing roughly 2 to 3 points a year. The guard's own audit of the older strategies found that the default never sold its core, checks were monthly, and the regime label was decoration.
 
 ## 9. Execution and timing: the secretary rule and others
 
@@ -166,16 +168,18 @@ Days at each level over the ten years: calm 1,721, watch 380, elevated 172, cris
 - **Rebalancing rule:** drift bands plus signal changes, not calendar. New money is spent before anything is sold.
 - **Signal checks:** monthly in the backtest by default; daily in the daily-follow simulation and the crash guard.
 
-## 10. Choosing between strategies: the switcher (branch, not merged)
+## 10. Choosing between strategies: the switcher (merged, rejected)
 
-Question: can a rule pick which strategy to follow? The literature suggests weakly, and costs and tax eat most of it. Implemented and tested as meta-policies over strategy "sleeves": equal blend (1/N, the baseline); inverse volatility of each strategy's returns over 12 months; momentum switch (100% in the best 12-month strategy, switch only if a challenger leads by 3 points); Hedge / exponentiated-gradient weights on monthly outperformance, 40% cap. Moving money out of a sleeve costs 0.1% each way plus approximate tax on that sleeve's gain. A switcher is declared worth using only if all hold: bootstrap 90% range of its yearly gap over the equal blend is above zero; deflated Sharpe above 0.95 with the trial count including all rules and strategies; it wins at least 60% of rolling 3-year windows; no window is worse than −5 points a year. Otherwise "no reliable edge". **No real-data result yet.** Known limit: the sleeves were themselves designed and screened on the same history, and sleeve curves already include internal tax, so tax on sleeve switches is approximate.
+Question: can a rule pick which strategy to follow? The literature suggests weakly, and costs and tax eat most of it. Implemented as meta-policies over strategy "sleeves": equal blend (1/N, the baseline); inverse volatility of each strategy's returns over 12 months; momentum switch (100% in the best 12-month strategy, switch only if a challenger leads by 3 points); Hedge / exponentiated-gradient weights on monthly outperformance, 40% cap. Moving money out of a sleeve costs 0.1% each way plus approximate tax on that sleeve's gain. A switcher counts as worth using only if all hold: bootstrap 90% range of its yearly gap over the equal blend is above zero; deflated Sharpe above 0.95 (trial count including all rules and strategies); it wins at least 60% of rolling 3-year windows; no window is worse than -5 points a year.
+
+**Real-data result (Oct 2017 to Oct 2026, 13 variants tried): do not switch automatically.** Momentum switch gained +0.1% a year over the equal blend (90% range -6.5 to +7.4, deflated Sharpe 0.06) at about twice the tax and costs; Hedge lost 1.5 points a year; inverse volatility lost 3.8. The equal blend itself beat holding Nifty in all 12 rolling 3-year windows (median +3.5 points a year) with a much smaller worst fall. Caveats: the strategies in the blend were designed on this same history, so that edge is probably overstated; sleeve curves already include their own tax, so switching tax is approximate; the 12 windows overlap heavily.
 
 ## 11. Validation method and results
 
 ### 11.1 Method
 - **Rolling robustness test (`validate`).** Start Rs 10 lakh in a Nifty 50 ETF, run every strategy day by day through the real planner with lots, costs and tax, over 10 years, then over 3-year windows starting every 12 months. Reported per strategy: whole-period after-tax CAGR, max drawdown, tax and costs, share of windows beating hold, median excess per year, worst window, early-half and late-half medians.
 - **Label rules:** "robust edge" needs wins in at least 60% of windows, a positive median in both halves, and no window worse than −5 points a year; "promising" needs 70%+ wins but fails one test; "cuts drawdown at little cost"; otherwise "no reliable edge".
-- **Statistical checks (open pull request):** 90% block-bootstrap interval for the annual excess over buy and hold; deflated Sharpe ratio (Bailey and López de Prado) using the number of variants tried; "robust edge" withheld when the interval includes zero. The overlap of the 3-year windows is acknowledged (windows are not independent; about three independent ones fit in ten years).
+- **Statistical checks (merged):** 90% block-bootstrap interval for the annual excess over buy and hold; deflated Sharpe ratio (Bailey and López de Prado) using the number of variants tried; "robust edge" withheld when the interval includes zero. The overlap of the 3-year windows is acknowledged (windows are not independent; about three independent ones fit in ten years).
 - **Daily-follow simulation:** the engine is run each day on data up to that day, every order is followed, tax is paid each April, and the remaining holdings are taxed as if sold on the last day. Reported for 10, 5 and 2 years, daily vs monthly checking.
 - **Out-of-sample discipline claimed:** parameters fixed in config before results; but see weaknesses.
 
@@ -223,7 +227,11 @@ For the core equity book, probably not. S&P's SPIVA India scorecard for year-end
 
 Tax edges: annual exemption harvest via the two-AMC swap (worth roughly 12.5% of the exempted gain each year); family exemptions via gifts; arbitrage fund instead of liquid fund for cash; loss harvesting without a wash-sale rule; wait for long-term status; spend new money first; employer NPS and VPF. Event edges: small-shareholder quota in tender-offer buybacks (back as capital gains since April 2026), momentum-index reconstitution front-running (the NSE rebuild is replicable from public prices; flows were about Rs 16,000 crore in December 2025), index inclusion, delisting and open offers, IPO retail quota. Global: Ireland-domiciled UCITS ETFs over US-listed (15% vs 25% dividend withholding, no US estate-tax exposure), avoid NSE-listed international ETFs at a premium, LRS TCS threshold, GIFT City funds, FX cost. Market-structure: go to cash or gold when trend breaks, limit orders near NAV in panics, REITs/InvITs. Explicitly rejected: option selling (one Nifty lot is about the whole portfolio and F&O STT rose in April 2026), do-it-yourself cash-futures arbitrage, HFT-style gaps, dividend stripping. Changes in 2026: exchange-bought SGBs lost tax-free redemption; buybacks taxed as capital gains again; F&O STT up.
 
-**Forecast and fundamental tests.** The valuation overlays in Section 5 come with a study (`forecast`) that (1) checks, before any trading, whether P/E percentile, earnings-yield spread and the regression forecast predict Nifty returns out of sample (rank correlation, number of independent periods, out-of-sample R² against the expanding mean), (2) runs each as an overlay on a Nifty-only strategy and on `core_xs` through the same lot, cost and tax engine, and (3) applies a White-style stationary-bootstrap reality check across all variants tried. Not yet run on real data. With roughly eighteen years of Nifty valuation history there are only about eighteen non-overlapping one-year outcomes, so I expect low power whatever the answer.
+**Forecast and fundamental tests (real data, Oct 2016 to Oct 2026, valuation history from 2012, 8 variants plus about 10 earlier strategies).**
+- *Do the signals predict at all?* Rank correlations of P/E percentile, earnings-yield-minus-bond-yield and the regression forecast with the next 252-day Nifty return were about ±0.33 with t around 0.5, on only about 3.8 independent periods; at 756 days there are about 0.6 independent periods. The walk-forward regression forecast had out-of-sample R-squared of **-1.03** against simply using the past average, i.e. worse than not forecasting.
+- *Trading overlays* (cut India equity to as low as 50%, never levered, remainder to cash): P/E-percentile de-risking halved the worst fall (-36% to -18%) but cost about 1.4 points a year after tax on a Nifty-only strategy; the other overlays were within noise of the base.
+- *Reality check across all variants tried:* the best variant (core-satellite + earnings yield vs bond yield, +2.1% a year, 95% interval -3.9% to +8.0%) has a 0.36 chance of looking that good by luck. Nothing was distinguishable from luck; the overlays are **not** in the live engine.
+- *Limits:* the NSE archive reaches only 2012 and niftyindices.com was unreachable, so the valuation history is short. With so few independent years, the test has low power whichever way the truth lies.
 
 ## 14. Known weaknesses I already suspect (please confirm, rank, and add)
 
@@ -240,7 +248,8 @@ Tax edges: annual exemption harvest via the two-AMC swap (worth roughly 12.5% of
 11. **Crash guard:** real-data replay shows 7 false alarms in 8, two missed ~12% falls, and a benefit that rests on one crash (2020). Its thresholds are untuned, and tuning them on this history would overfit.
 12. **Behavioural risk:** the user, not the engine, executes; the report's complexity may itself drive bad overrides.
 13. **Model risk in the asset-class comparison** (flats, farmland, Dubai flat): inputs are assumptions, not data.
-14. **Regulatory risk:** I did not check whether a retail user running this on someone else's money would need registration (this is for one person's own money).
+14. **Execution detail gaps** (raised by an automated external review, Section 17): trade sizes are fractional units, not whole shares; the "do not trade" floor is a percentage of the portfolio, not a rupee amount; backtest fills occur at later closes rather than the next open with a modelled spread surprise; forward-filled prices (up to 5 days) across holidays understate volatility of foreign assets.
+15. **Regulatory risk:** I did not check whether a retail user running this on someone else's money would need registration (this is for one person's own money).
 
 ## 15. Questions for the critic
 
@@ -266,7 +275,27 @@ Tax edges: annual exemption harvest via the two-AMC swap (worth roughly 12.5% of
 **Practicality and risk**
 14. What is the biggest way this system could lose the owner real money that none of the above covers?
 15. If you could keep only three components, which would they be?
+16. Given that every add-on (guard, switcher, valuation and forecast overlays) has so far failed to beat the plain core, is the honest conclusion to run buy and hold plus yearly tax harvesting, and treat everything else as research?
 
 ## 16. Reference list of the main literature the design leans on
 
 Faber (2007) trend rule; Moskowitz, Ooi and Pedersen (2012) time-series momentum; Hurst, Ooi and Pedersen (2017); Antonacci dual momentum; Daniel and Moskowitz (2016) momentum crashes; Barroso and Santa-Clara (2015) risk-managed momentum; Moreira and Muir (2017) and Harvey et al. (2018) volatility targeting; Asness, Frazzini and Pedersen (2012) risk parity; Keller and Keuning (2018) defensive asset allocation; George and Hwang (2004) 52-week high; DeMiguel, Garlappi and Uppal (2009) 1/N; Bailey and López de Prado (2014) deflated Sharpe; White (2000) reality check; S&P SPIVA India scorecard; SEBI studies on retail F&O losses. Only titles and abstracts were reviewed for several of these; please check the claims.
+
+## 17. External review already received, and what was done with it
+
+An earlier automated deep-research review (which could see only the public repository description, not this document) made generic points. Sorted:
+
+**Valid and relevant to this project**
+- *Whole-unit sizing.* The planner computes fractional quantities. For India-listed ETFs priced at Rs 50 to 300 the rounding error is small, but orders must be whole units, and US lines may be priced at several hundred dollars. Planned: round buys down to whole units with a greedy pass that spends the residual on the largest remaining gap; a full integer program is overkill at this size.
+- *Rupee floor on trades.* Fixed charges are tiny in India (about Rs 16 DP charge per sell, no brokerage on delivery for discount brokers), but a percentage floor alone can let through trivial trades. Planned: add an absolute minimum trade value alongside the existing 3% of portfolio.
+- *Sell before buy, and cash inflow.* Already handled: buys are funded only from approved sale proceeds plus idle cash, and new money is spent before anything is sold. The report should say explicitly that sells go first.
+- *Execution at the next open, not the close.* The backtest already fills at later closes than the signal day, not the same close; filling at the next open with a spread allowance would be stricter. Not yet done.
+- *Forward-filling across holidays.* Prices are filled for at most 5 days; this slightly understates the volatility of US assets used in risk parity. Worth a check.
+- *Accounting-invariant tests* (cash never negative, no negative holdings, value after trades equals value before minus costs and tax). Valid; to be added to the test suite.
+
+**Not applicable here**
+- Market impact, VWAP, latency, solver run-time: irrelevant at this size, as the review itself says.
+- Mean-variance optimisation, Ledoit-Wolf shrinkage, hierarchical risk parity: no strategy here estimates a covariance matrix or expected returns, so there is nothing to shrink. The risk-parity variant is inverse volatility and is labelled that way. Replacing it with exact equal-risk-contribution weights is possible but adds another trial on the same history, with five highly structured assets.
+- Highest-in-first-out lot accounting: contradicts the Indian rule that sales consume the oldest units first (the engine uses FIFO by default).
+- Adjusted prices and corporate actions: the engine already uses adjusted closes.
+- Comments on the repository owner's background and on an unrelated automated-market-maker repository: not relevant to the strategy.
