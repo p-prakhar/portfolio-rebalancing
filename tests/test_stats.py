@@ -70,3 +70,20 @@ def test_holdings_xirr_and_forward_lines():
                       index=pd.bdate_range("2022-01-03", periods=800))
     txt = "\n".join(forward_lines(pos, px))
     assert "next 3 years" in txt and "Chance of ending below" in txt
+
+
+def test_fifo_is_default_and_sells_oldest_first():
+    import copy
+    from pe.config import Lot, load_settings
+    from pe.engine import _oldest_rows, _pick_lots
+    s = load_settings()
+    assert s.tax["lot_method"] == "fifo"
+    old, new = Lot("NIFTYBEES", 10, date(2023, 1, 2), 50.0), Lot("NIFTYBEES", 10, date(2024, 6, 3), 120.0)
+    got = _pick_lots([new, old], 10, 80.0, "in_equity", date(2025, 1, 2), s)
+    assert [l.buy_date for l, _ in got] == [date(2023, 1, 2)]           # FIFO takes the oldest, though the newer lot is the loss
+    sp = copy.deepcopy(s)
+    sp.raw["tax"]["lot_method"] = "specific"
+    got = _pick_lots([new, old], 10, 80.0, "in_equity", date(2025, 1, 2), sp)
+    assert [l.buy_date for l, _ in got] == [date(2024, 6, 3)]           # specific-lot mode picks the loss first
+    pos = pd.DataFrame({"symbol": ["A", "A", "B"], "buy_date": [date(2024, 5, 1), date(2023, 5, 1), date(2024, 1, 1)]})
+    assert sorted(_oldest_rows(pos)) == [1, 2]
