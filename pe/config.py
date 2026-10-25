@@ -93,11 +93,12 @@ def load_settings(path: str | Path | None = None) -> Settings:
     return Settings(raw=raw, assets=assets)
 
 
-def load_holdings(path: str | Path | None = None) -> Holdings:
-    path = Path(path or ROOT / "config" / "holdings.yaml")
-    if not path.exists():   # public repo ships only the example; real holdings stay local
-        path = ROOT / "config" / "holdings.example.yaml"
-    raw = yaml.safe_load(path.read_text())
+def load_holdings(path: str | Path | None = None, apply_actions: bool = True) -> Holdings:
+    target_path = Path(path or ROOT / "config" / "holdings.yaml")
+    p = target_path
+    if not p.exists():   # public repo ships only the example; real holdings stay local
+        p = ROOT / "config" / "holdings.example.yaml"
+    raw = yaml.safe_load(p.read_text())
     lots, pending, meta = [], [], {}
     for sym, m in (raw.get("assets") or {}).items():
         meta[sym] = dict(m or {})
@@ -110,12 +111,18 @@ def load_holdings(path: str | Path | None = None) -> Holdings:
         else:
             pending.append({"symbol": l["symbol"], "buy_date": _to_date(l["buy_date"]),
                             "amount_inr": float(l["amount_inr"])})
-    return Holdings(
+    h = Holdings(
         lots=lots, cash_inr=float(raw.get("cash_inr", 0)),
         realised_this_fy=raw.get("realised_this_fy", {}) or {},
         lrs_remitted_this_fy_inr=float(raw.get("lrs_remitted_this_fy_inr", 0)),
         pending_amounts=pending, meta=meta,
     )
+    if apply_actions:
+        from .corporate_actions import apply_to_holdings, sync_holdings_file
+        apply_to_holdings(h)
+        if target_path.exists() and target_path == (ROOT / "config" / "holdings.yaml"):
+            sync_holdings_file(target_path)
+    return h
 
 
 ETF_HINTS = ("BEES", "ETF", "IETF", "NIF", "SETF", "GOLD", "SILVER", "LIQUID")

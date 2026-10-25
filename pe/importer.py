@@ -75,13 +75,22 @@ def lots_from_tradebook(path: str, usd_inr: float | None = None) -> tuple[list[d
     lots = [{"symbol": s, "qty": round(q, 6), "buy_date": str(d), "price": round(p, 4),
              **({"currency": "USD"} if s in usd_syms else {})}
             for s, dq in book.items() for q, d, p in dq if q > 1e-9]
+    from .corporate_actions import apply_corporate_actions, resulting_asset_metadata
+    lots, ca_notices = apply_corporate_actions(lots)
+    warnings.extend(ca_notices)
     return lots, warnings
 
 
 def write_holdings(lots: list[dict], out_path: str, cash_inr: float = 0.0) -> None:
+    from .corporate_actions import resulting_asset_metadata
+    meta = resulting_asset_metadata()
+    held_syms = {l["symbol"] for l in lots}
+    assets = {sym: meta[sym] for sym in held_syms if sym in meta}
     doc = {"lots": lots, "cash_inr": cash_inr,
            "realised_this_fy": {"equity_stcg": 0, "equity_ltcg": 0, "other_stcg": 0, "other_ltcg": 0},
            "lrs_remitted_this_fy_inr": 0}
+    if assets:
+        doc["assets"] = assets
     header = (f"# Generated from a tradebook on {date.today()}. Check it, then add an `assets:` block for any\n"
               "# symbol whose ticker/tax treatment the defaults get wrong (see README).\n")
     with open(out_path, "w") as f:

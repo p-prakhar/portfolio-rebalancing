@@ -102,7 +102,12 @@ def _buy(book: Book, settings: Settings, symbol: str, value: float, price: float
 
 
 def _nav(book: Book, px_row: pd.Series) -> float:
-    return sum(l.qty * float(px_row[l.symbol]) for l in book.lots) + book.cash
+    def _p(l: Lot) -> float:
+        p = px_row.get(l.symbol) if hasattr(px_row, "get") else None
+        if p is None or pd.isna(p):
+            return float(l.price)
+        return float(p)
+    return sum(l.qty * _p(l) for l in book.lots) + book.cash
 
 
 def _check_days(idx: pd.DatetimeIndex, freq: str) -> set:
@@ -222,7 +227,9 @@ def run_variant(name, policy, execution, harvest, init_lots, px, vix, settings: 
     unreal = {b: 0.0 for b in BUCKETS}
     for l in book.lots:
         a = settings.assets[l.symbol]
-        unreal[bucket_for(a.tax_class, is_long_term(l, a.tax_class, idx[-1].date(), settings))] += l.qty * (float(last[l.symbol]) - l.price)
+        p_last = last.get(l.symbol) if hasattr(last, "get") else None
+        p_val = float(l.price) if (p_last is None or pd.isna(p_last)) else float(p_last)
+        unreal[bucket_for(a.tax_class, is_long_term(l, a.tax_class, idx[-1].date(), settings))] += l.qty * (p_val - l.price)
     liq_tax = compute_tax({b: book.fy_realised[b] + unreal[b] for b in BUCKETS}, settings).tax
     return nav, book, accrued, liq_tax
 

@@ -72,6 +72,8 @@ universe:
   - {symbol: GLD,  ticker: GLD, name: "Gold (via IBKR)",         tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: gold, domicile: US}
   - {symbol: TLT,  ticker: TLT, name: "US 20y Treasuries (via IBKR)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: bonds, domicile: US, div_yield: 0.04}
   - {symbol: TCS,  ticker: TCS.NS, name: "Tata Consultancy Services", tax_class: in_equity, venue: nse_stock, sleeve: india_equity, rotate: false}
+  - {symbol: TMPV, ticker: TMPV.NS, name: "Tata Motors Passenger Vehicles", tax_class: in_equity, venue: nse_stock, sleeve: india_equity, rotate: false}
+  - {symbol: TMCV, ticker: TMCV.NS, name: "Tata Motors Commercial Vehicles", tax_class: in_equity, venue: nse_stock, sleeve: india_equity, rotate: false}
   # --- wider universe: silver/platinum/copper/other metals and semiconductors, India and abroad ---
   # rotate: false on purpose. Letting the momentum rotation pick from these made the 10-year result slightly WORSE (fewer
   # winning windows, more turnover and tax; see reports/validation.md). They are still compared (`python main.py compare`)
