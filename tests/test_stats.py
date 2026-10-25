@@ -100,3 +100,9 @@ def test_significance_centres_on_after_tax_return():
     st = significance(curves, "base", full, 6.0)
     assert abs(st["s"]["excess"] - (np.log(1.105) - np.log(1.10))) < 1e-9
     assert st["s"]["lo"] < st["s"]["excess"] < st["s"]["hi"]
+
+
+def test_deflated_sharpe_ignores_one_extreme_trial():
+    r = np.random.default_rng(9).normal(0.0004, 0.01, 2500)
+    base_trials = list(np.random.default_rng(10).normal(0.0, 0.02, 12))
+    assert deflated_sharpe(r, base_trials + [5.0]) == deflated_sharpe(r, base_trials + [0.5])

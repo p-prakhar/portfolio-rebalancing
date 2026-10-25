@@ -90,7 +90,12 @@ def deflated_sharpe(excess_returns: np.ndarray, trial_sharpes: list[float]) -> f
     if len(r) < 30 or n < 2 or r.std(ddof=1) == 0:
         return None
     sr, skew, kurt = _moments(r)
-    v = float(np.var(trial_sharpes, ddof=1))
+    # Robust spread (MAD): a near-zero-volatility variant, such as buy and hold plus harvesting, has an enormous Sharpe
+    # ratio of its own and would otherwise inflate the bar every other variant must clear.
+    ts = np.asarray(trial_sharpes, dtype=float)
+    v = float((1.4826 * np.median(np.abs(ts - np.median(ts)))) ** 2)
+    if v <= 0:
+        return None
     sr0 = np.sqrt(v) * ((1 - EULER_GAMMA) * _N.inv_cdf(1 - 1 / n) + EULER_GAMMA * _N.inv_cdf(1 - 1 / (n * np.e)))
     denom = 1 - skew * sr + (kurt - 1) / 4 * sr ** 2
     if denom <= 0:
