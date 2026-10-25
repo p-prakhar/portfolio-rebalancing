@@ -13,8 +13,10 @@ All thresholds are fixed in settings.yaml (valuation block) and were set before 
 """
 from __future__ import annotations
 
+import io
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -34,6 +36,44 @@ def _dir(cfg: dict) -> Path:
 
 
 # ---------------------------------------------------------------- fetching
+
+NSE_ARCHIVES = ("https://archives.nseindia.com", "https://nsearchives.nseindia.com")   # either may 403 after heavy use
+NSE_PATH = "/content/indices/ind_close_all_{:%d%m%Y}.csv"
+_NIFTY50_NAMES = {"nifty 50", "cnx nifty", "s&p cnx nifty"}
+
+
+def _nse_archive_day(day: pd.Timestamp):
+    """One daily NSE index close file -> (date, pe, pb, div_yield) for the Nifty 50, or None (holiday / not published)."""
+    import requests
+    for attempt in range(6):
+        host = NSE_ARCHIVES[attempt % 2]
+        try:
+            r = requests.get(host + NSE_PATH.format(day), headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+        except Exception:
+            continue
+        if r.status_code in (403, 429, 502, 503):
+            continue
+        if r.status_code != 200 or not r.text.startswith("Index Name"):
+            return None
+        df = pd.read_csv(io.StringIO(r.text))
+        row = df[df["Index Name"].str.strip().str.lower().isin(_NIFTY50_NAMES)]
+        if row.empty:
+            return None
+        row = row.iloc[0]
+        return (day, row.get("P/E"), row.get("P/B"), row.get("Div Yield"))
+    return None
+
+
+def _fetch_nse_archive(first: pd.Timestamp, last: pd.Timestamp) -> pd.DataFrame:
+    """Fallback when niftyindices.com is down: daily NSE archive files carry P/E, P/B, Div Yield for every index."""
+    days = pd.bdate_range(first, last)
+    with ThreadPoolExecutor(4) as ex:
+        out = [r for r in ex.map(_nse_archive_day, days) if r]
+    if not out:
+        return pd.DataFrame()
+    df = pd.DataFrame(out, columns=["date", "pe", "pb", "div_yield"]).set_index("date")
+    return df.apply(pd.to_numeric, errors="coerce").sort_index()
+
 def fetch_nifty_valuation(cfg: dict, start: int = 1999, refresh: bool = False) -> pd.DataFrame:
     """Daily Nifty 50 pe, pb, div_yield. Manual CSV (date,pe,pb,div_yield) wins; else niftyindices.com in one-year chunks."""
     man = ROOT / "data" / "manual" / "nifty_valuation.csv"
@@ -64,6 +104,17 @@ def fetch_nifty_valuation(cfg: dict, start: int = 1999, refresh: bool = False) -
             for d in data:
                 rows.append((d.get("DATE") or d.get("Date"), d.get("pe") or d.get("P/E"), d.get("pb") or d.get("P/B"),
                              d.get("divYield") or d.get("Div Yield")))
+        if not rows:
+            # NSE archive only goes back to about 2012, so history is shorter than the niftyindices route
+            lo = max(pd.Timestamp("2011-01-01"), have.index[-1] if not have.empty else pd.Timestamp("2011-01-01"))
+            fb = _fetch_nse_archive(lo, pd.Timestamp.today().normalize())
+            if not fb.empty:
+                log.warning("niftyindices unavailable; used NSE daily archive from %s", fb.index[0].date())
+                fb = fb.dropna(subset=["pe"])
+                df = pd.concat([have, fb]) if not have.empty else fb
+                df = df[~df.index.duplicated(keep="last")]
+                df.rename_axis("date").to_csv(cache)
+                have = df
         if rows:
             df = pd.DataFrame(rows, columns=["date", "pe", "pb", "div_yield"])
             df["date"] = pd.to_datetime(df["date"], format="mixed", dayfirst=True, errors="coerce")
