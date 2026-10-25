@@ -1,6 +1,6 @@
 # Edges a small personal investor can actually use
 
-_Last researched 22 Oct 2026. Includes Budget 2026 changes, which took effect 1 Apr 2026._
+_Last researched 25 Oct 2026. Includes Budget 2026 changes, which took effect 1 Apr 2026._
 
 Large funds can't use most of these. They are held back by mandates, tracking error, capacity,
 or simply by being a different kind of taxpayer. Each item lists what it is worth, what it
@@ -12,6 +12,79 @@ did not change: STCG 20%, LTCG 12.5% above Rs 1.25 lakh
 ([Business Standard](https://www.business-standard.com/budget/news/budget-2026-ltcg-tax-rates-unchanged-for-fy27-fm-sitharaman-126020100424_1.html)).
 
 The engine automates the items marked ⚙.
+
+## Is running our own engine better than buying a good fund?
+
+Short answer: for the core of the equity book, no. A low-cost index fund or ETF is the right default, and
+this engine's validation (`reports/validation.md`) shows its rotation strategies do not reliably beat holding
+one after Indian tax. Our own setup earns its place in the places below, and loses to a fund in the places after that.
+
+**The odds on "a good active fund".** In S&P's SPIVA India scorecard for year-end 2025, 76% of large-cap funds,
+79% of mid/small-cap funds and 83% of ELSS funds trailed their benchmark over 10 years; over 5 years it was 84%
+for large-cap. About 27% of funds across categories did not survive the 10 years
+([SPIVA India year-end 2025](https://www.spglobal.com/spdji/en/spiva/article/spiva-india-year-end-2025/)).
+Single years can flatter active funds (only 12% of mid/small-cap funds lagged in 2025), and the large-cap benchmark
+is a large-mid index, not Nifty 50, so read it as a rough guide. A fund that "has been good" is picked with
+hindsight; roughly one in four of them beats the index over a decade, and nobody can tell which in advance. So the
+real contest is our engine against an index fund, not against the best fund.
+
+**Where a small corpus gives us a structural edge**
+
+1. **Tax timing is ours.** Funds pass gains straight through; we choose when to realise them: the yearly LTCG
+   exemption harvest (A1), loss harvesting with no wash-sale rule (A4), waiting for long-term status (A5),
+   spending new money before selling (A6), and gifting units to family (A2). Validation: buy and hold plus
+   harvesting gave about 0.4 points a year over plain holding (10.9% vs 10.4% after tax), the only edge that
+   repeated across windows (and it has not yet been tested for significance on this data).
+2. **No capacity limit and no mandate.** Funds hold a benchmark and a style; we can sit in cash, gold or
+   US assets when trend breaks (D1). Small-cap funds have closed to lump sums because there are too few
+   liquid small caps for their size, so impact cost is real for them and not for Rs 50k positions
+   ([Finnovate](https://www.finnovate.in/learn/blog/why-are-mutual-funds-shutting-inflows-into-small-cap-funds), 2023).
+3. **Global access funds cannot give.** Indian funds are capped at USD 7 billion of overseas investment in total,
+   reached in January 2022; each fund house is frozen at its early-2022 headroom. By July 2026, 54 of 66
+   international funds no longer took fresh money, and India-listed global ETFs trade at premiums
+   ([Value Research](https://www.valueresearchonline.com/stories/228977/most-international-funds-have-shut-12-still-take-your-sip/)).
+   The LRS route (C-section) is open to an individual, at the cost of 20% TCS above Rs 10 lakh a year.
+4. **Event edges that need small size**: tender buyback small-shareholder quota (B1) and index
+   reconstitution (B2).
+5. **One book across every asset class.** Funds optimise one slice. The engine weighs equity, gold, US,
+   cash and the real-asset comparison against each other, with your actual tax lots and slab.
+
+**Where a fund wins, and we should use it**
+
+1. **Fund-level churn is not taxed.** A mutual fund is a pass-through: buying and selling inside it triggers no
+   tax for you ([Value Research](https://www.valueresearchonline.com/stories/27590/mutual-funds-don-t-pay-taxes/)).
+   Every rotation we run realises gains in our own name at 20% (short term) or 12.5% (long term). That is why the
+   10-year validation shows cross-sectional momentum paying about Rs 2.3 lakh of tax and Rs 0.5 lakh of costs on a
+   Rs 10 lakh start. For factor exposure, a Nifty200 Momentum 30 index fund (offered by several AMCs) gets the same
+   rule-based tilt with tax-free internal churn. Prefer it to our own `xs_momentum` unless validation shows the DIY
+   version with a bootstrap range above zero. Switching between funds is still a taxable redemption.
+2. **Costs are falling and small.** SEBI's 2026 regulations split the expense ratio into a base ratio, brokerage
+   and statutory levies, lowered the base cap by about 10 to 15 basis points, and cut the cash-market brokerage cap
+   from 8.5 to 6 basis points; one expert expects equity fund expense ratios to fall by roughly 5 to 7 basis points
+   ([Outlook Money](https://www.outlookmoney.com/invest/mutual-funds/sebi-2026-mutual-fund-regulations-bring-clearer-costs-not-cheaper-funds)).
+   Direct Nifty 50 index funds charged about 0.1% in 2020; tracking difference ran 0.3% to 0.8% a year and did not
+   follow the expense ratio ([freefincal](https://freefincal.com/which-nifty-index-fund-has-the-lowest-tracking-error/), 2020 data).
+   Our own ETF trades add spread, STT and DP charges on every sale, which `pe/costs.py` itemises.
+3. **Small caps, debt and anything illiquid or fiddly**: use a fund. Single stocks at our size carry 0.1% STT each way
+   and wide spreads, and the engine's validation does not support DIY stock picking.
+4. **Discipline.** A fund does not tempt you to act on a bad week. The engine only advises; the cost of overriding
+   it is yours.
+
+**Bottom line.** Hold the core in a low-cost Nifty index ETF or fund, which is what the engine's default does. Use
+the engine for the things a fund cannot do for you: harvesting, lot-aware timing, gold/cash/US allocation, a
+risk-off rule, LRS and event trades. Expect a few tenths of a point a year from tax work and a shallower drawdown
+from simple diversification (in validation the static mix and risk parity cut the worst fall from about -36% to
+about -15% to -23% at little cost), not outperformance from stock selection or rotation. Buy factor tilts through
+a fund, not through our own rotation, unless the validator says otherwise.
+
+**Lot selection is FIFO, not a free choice.** Depositories and the tax filing treat a sale as consuming the oldest
+units of an ISIN first, per demat account or folio, for shares and fund units alike
+([5paisa](https://www.5paisa.com/stock-market-guide/tax/fifo-in-demat), [Outlook Money](https://www.outlookmoney.com/tax/tax-saving-tips-why-having-only-one-demat-account-can-make-you-lose-profit-from-your-equities);
+these are secondary sources, so confirm with a CA). The engine used to pick the cheapest lot; it now defaults to
+`tax.lot_method: fifo` and harvests only the oldest lot of each holding. Holding lots in separate demat accounts is
+the way to regain choice, and `lot_method: specific` models that case. Earlier validation numbers assumed free lot
+choice and should be re-run.
+
 
 ## A. Tax edges: the largest and most reliable
 

@@ -95,9 +95,23 @@ def _partner(symbol: str, settings: Settings) -> str | None:
     return None
 
 
+def _fifo(settings: Settings) -> bool:
+    return settings.tax.get("lot_method", "fifo") == "fifo"
+
+
+def _oldest_rows(pos: pd.DataFrame) -> pd.Index:
+    """Index of the oldest lot of each symbol in the positions table (the only one a FIFO sale can reach on its own)."""
+    return pos.groupby("symbol").buy_date.idxmin().values
+
+
 def _pick_lots(lots: list[Lot], qty: float, price: float, tax_class: str, today: date, settings: Settings):
-    """Tax-smart lot selection: losses first, then long-term gains, then short-term gains (least gain first)."""
+    """Which lots a sale consumes. Default FIFO: depositories and the tax filing treat a sale of a demat security (or fund
+    units) as the oldest units first, per account and ISIN, so the investor cannot choose. `lot_method: specific` is only
+    right if each lot sits in its own demat account/folio; it then sells losses first, then long-term gains, then
+    short-term gains (least gain first)."""
     def key(l):
+        if _fifo(settings):
+            return (l.buy_date,)
         g = price - l.price
         lt = is_long_term(l, tax_class, today, settings)
         return (0 if g < 0 else 1 if lt else 2, g)
@@ -187,6 +201,8 @@ def make_plan(today_ts, lots: list[Lot], cash_inr: float, px_hist: pd.DataFrame,
                                                  effective_rate(bucket_for(a.tax_class, True), settings), risk_exit)
                     if w:
                         deferred.append(f"WAIT on selling {q:,.2f} {s} (bought {lot.buy_date}) until {ltd}: {w_why}")
+                        if _fifo(settings):
+                            break           # FIFO: newer lots cannot be sold ahead of this one
                         continue
                     why.append(w_why)
                 keep.append((lot, q))
@@ -273,6 +289,8 @@ def make_plan(today_ts, lots: list[Lot], cash_inr: float, px_hist: pd.DataFrame,
         remaining = tx["ltcg_exemption"] - min(tx["ltcg_exemption"], max(0.0, running["eq_lt"]))
         no_rebuy = [sym for sym, a in settings.assets.items() if a.sell_only]   # harvesting needs a re-buy leg
         cands = pos[(pos.tax_class == "in_equity") & pos.long_term & (pos.gain > 0) & ~pos.symbol.isin(sold) & (pos.symbol != "CASH") & ~pos.symbol.isin(no_rebuy)]
+        if _fifo(settings):
+            cands = cands[cands.index.isin(_oldest_rows(pos))]       # a sale takes the oldest units, so only those can be harvested
         if remaining >= 5000 and not cands.empty:
             r = cands.assign(gpu=cands.gain / cands.qty).sort_values("gpu", ascending=False).iloc[0]
             g = min(remaining, r.gain)
@@ -297,6 +315,8 @@ def make_plan(today_ts, lots: list[Lot], cash_inr: float, px_hist: pd.DataFrame,
                                     cost=leg_cost(settings, a, "buy", v, r.price)))
         # loss harvesting
         losers = pos[(pos.gain < -np.maximum(5000, 0.03 * pos.value)) & ~pos.symbol.isin(sold) & (pos.symbol != "CASH") & ~pos.symbol.isin(no_rebuy)]
+        if _fifo(settings):
+            losers = losers[losers.index.isin(_oldest_rows(pos))]
         for _, r in losers.iterrows():
             a = settings.assets[r.symbol]
             lot = next(l for l in by_sym[r.symbol] if l.buy_date == r.buy_date and abs(l.qty - r.qty) < 1e-6)

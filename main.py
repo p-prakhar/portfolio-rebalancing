@@ -131,7 +131,7 @@ def cmd_run(args):
     if not (args.demo or args.asof):
         guard_mem_save(mem)
     timing = timing_step(plan, px, settings) if not args.demo else []
-    text = live_report(plan, settings, timing, args.demo, note)
+    text = live_report(plan, settings, timing, args.demo, note, px)
     if plan.target.guard:
         from pe import crash
         drills = [crash.drill(h.lots, h.cash_inr, px, vix, settings, _fy_realised(h, prof), usd, 3)]
@@ -364,6 +364,9 @@ def main():
     ct.add_argument("--demo", action="store_true", help="synthetic prices (code check only)")
     ct.add_argument("--variants", action="store_true", help="instead: try the pre-declared guard configurations on the core strategy (slow)")
     ct.add_argument("--scenario", default="bubble_burst", choices=["steady", "bubble_burst", "v_crash", "chop", "grind_bear"])
+    tp = sub.add_parser("timing", help="compare ways of deciding when to rebalance (bands, calendar, fill rules) with costs, tax and bootstrap")
+    tp.add_argument("--years", type=int, default=10); tp.add_argument("--demo", action="store_true", help="synthetic prices (code check only)")
+    tp.add_argument("--refresh", action="store_true")
     sub.add_parser("compare", help="compare metals, semiconductors and other assets in India and abroad, after cost and tax")
     sub.add_parser("shell", help="guided interactive shell with autocomplete: profile, imports, check, site")
     sub.add_parser("reset-window")
@@ -409,6 +412,12 @@ def main():
         cmd_crash(args)
     elif args.cmd == "crash-test":
         cmd_crash_test(args)
+    elif args.cmd == "timing":
+        from pe import timing_sweep
+        res = timing_sweep.run(args.years, args.demo, args.refresh)
+        timing_sweep.save(res)
+        show_md(timing_sweep.report(res))
+        print("\nSaved reports/timing.md")
     elif args.cmd == "compare":
         cmd_compare(args)
     elif args.cmd == "shell":

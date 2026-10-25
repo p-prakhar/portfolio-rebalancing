@@ -25,6 +25,7 @@ tax:
     foreign: 24                  # US shares/ETFs held via IBKR etc.
     in_debt: null                # specified MF / liquid ETF: always slab, no LT
     mf_other: 24                 # unlisted non-equity mutual funds (gold/international FoFs, hybrids under 65% equity) bought after 1 Apr 2025
+  lot_method: fifo               # fifo = oldest units are sold first (what depositories and the ITR apply). 'specific' only if every lot is in its own demat account/folio
   discount_rate: 0.07            # used to value tax deferral
   default_deferral_years: 5      # if you don't sell now, roughly when would you?
   lrs_tcs_threshold: 1000000     # LRS remittances above this per FY attract TCS
@@ -104,8 +105,8 @@ universe:
   - {symbol: DIXON,      ticker: DIXON.NS,      name: "Dixon Technologies (electronics manufacturing)", tax_class: in_equity, venue: nse_stock, sleeve: semis, rotate: false}
   - {symbol: KAYNES,     ticker: KAYNES.NS,     name: "Kaynes Technology (electronics, OSAT push)", tax_class: in_equity, venue: nse_stock, sleeve: semis, rotate: false}
   # Signal-only instruments for the crash guard's credit check (high-yield vs treasuries). Never bought.
-  - {symbol: HYG,  ticker: HYG,  name: "US high-yield bonds (credit-stress signal only)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: bonds, rotate: false}
-  - {symbol: IEF,  ticker: IEF,  name: "US 7-10y Treasuries (credit-stress signal only)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: bonds, rotate: false}
+  - {symbol: HYG,  ticker: HYG,  name: "US high-yield bonds (credit-stress signal only)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: bonds, rotate: false, domicile: US}
+  - {symbol: IEF,  ticker: IEF,  name: "US 7-10y Treasuries (credit-stress signal only)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: bonds, rotate: false, domicile: US}
   # --- Global markets via IBKR, Irish UCITS ETFs (USD lines on the London Stock Exchange). See docs/GLOBAL_INVESTING.md ---
   # Accumulating, Irish-domiciled: no India tax on dividends until you sell, and no US estate-tax exposure. Taxed as foreign assets
   # (24 months to long term, 12.5%). rotate: false until validation shows rotation into them helps.
