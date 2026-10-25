@@ -218,6 +218,44 @@ function show(id, push){
 }
 addEventListener('resize',()=>{ const cur=TABS.find(t=>!$('#panel-'+t.id).hidden); if (cur && redraw[cur.id]) redraw[cur.id](); });
 
+/* ---------- crash guard ---------- */
+const LEVEL_TONE={calm:['Calm','hold'],watch:['Watch','warn'],elevated:['Elevated','warn'],crisis:['Crisis','sell']};
+function crashPanel(C){
+  const a=C.assess, tone=LEVEL_TONE[a.label], d2=C.drills['2'], d3=C.drills['3'], drill=a.level>=2?C.drills[String(a.level)]:d3;
+  const lead = a.level>=2 ? `The guard is cutting risk now. It keeps ${pc(a.keep[a.level],0)} of your risk assets and moves the rest to cash and gold.`
+    : a.level===1 ? 'No new money goes into risk assets until this clears. Nothing is sold.' : 'No warning signals are stacking up. Nothing changes.';
+  const on=a.families.filter(f=>f.points>0).length;
+  const box=el('div',{class:'panel block'},
+    el('div',{style:'display:flex;gap:8px;align-items:center;flex-wrap:wrap'}, el('h2',{style:'margin:0'},'Crash guard'), el('span',{class:'chip '+tone[1]}, tone[0])),
+    el('p',{}, lead),
+    el('p',{class:'small muted'}, `${on} of ${a.families.length} signals are on${a.froth?', and the market ran far above its trend recently, so the bar is one point lower':''}. Level ${a.level} since ${a.since}.`),
+    el('div',{class:'pick'}, a.families.map(f=>el('span',{class:'chip '+(f.points>0?'warn':'hold')}, f.name+(f.points>0?': on':': off')))),
+    el('details',{}, el('summary',{},'What each signal sees'), el('ul',{class:'reasons',style:'margin-top:12px'}, a.families.map(f=>el('li',{}, el('b',{}, f.name+': '), f.detail)).concat(a.credit_available?[]:[el('li',{class:'muted'},'Credit is not scored because HYG and IEF prices are missing.')]))));
+  const dr=(d,name)=>d.sells.length ? `${name}: sell ${rs(d.sold)} (${pc(d.sold/Math.max(d.nav,1),0)}), tax ${rs(d.tax)}, costs ${rs(d.cost)}. It pays for itself if the market falls about ${pc(d.breakeven_fall)} more.` : `${name}: nothing to sell.`;
+  box.append(el('details',{}, el('summary',{},'What a fast exit would cost today'),
+    el('ul',{class:'reasons',style:'margin-top:12px'}, el('li',{}, dr(d2,'Elevated')), el('li',{}, dr(d3,'Crisis')),
+      d3.waits.length ? el('li',{class:'muted'}, d3.waits[0]) : null),
+    el('p',{class:'small muted',style:'margin-top:8px'},'Lots are picked tax-smart (losses first, then long-term gains). Exit loads on a mutual-fund shelter are not included. In a crisis the guard stops waiting for a lot to turn long term.')));
+  return box;
+}
+
+function crashTestPanel(T){
+  const b=T.full[T.base], g=T.full['Buy & hold + crash guard'], day=x=>x?String(x).slice(0,10):'not yet';
+  const just=T.ledger.filter(r=>r.justified).length;
+  const box=el('div',{class:'panel block'}, el('h2',{},'Crash test'),
+    el('p',{class:'small muted'},`${T.start} to ${T.end}. Every fall of 10% or more, and every false alarm, after costs and Indian tax. Parameters were fixed before this run.`));
+  if (g) box.append(el('div',{class:'stats'},
+    el('div',{class:'stat'}, el('small',{},'Worst fall, doing nothing'), el('b',{}, pc(b.max_drawdown))),
+    el('div',{class:'stat'}, el('small',{},'Worst fall, with the guard'), el('b',{}, pc(g.max_drawdown))),
+    el('div',{class:'stat'}, el('small',{},'Yearly return given up or gained'), el('b',{}, spc(g.cagr-b.cagr))),
+    el('div',{class:'stat'}, el('small',{},'False alarms'), el('b',{}, `${T.ledger.length-just} of ${T.ledger.length}`))));
+  box.append(el('details',{}, el('summary',{},'Each fall and what the guard did'), el('div',{class:'scroll'}, el('table',{}, el('thead',{}, el('tr',{}, ['Peak','Market fall','Guard flagged','Doing nothing','With guard'].map(h=>el('th',{},h)))),
+    el('tbody',{}, T.episodes.map(e=>el('tr',{}, el('td',{},day(e.peak)), el('td',{},pc(e.depth_market)), el('td',{}, e.guard_flag?`${day(e.guard_flag.date)} (market ${spc(e.guard_flag.market_down_at_flag)})`:'never'), el('td',{},pc(e.by_strategy[T.base])), el('td',{}, g?pc(e.by_strategy['Buy & hold + crash guard']):'n/a'))))))));
+  box.append(el('details',{}, el('summary',{},'Every alarm, justified or not'), el('div',{class:'scroll'}, el('table',{}, el('thead',{}, el('tr',{}, ['From','To','Worst level','Further fall in 120 days','Market while out','Verdict'].map(h=>el('th',{},h)))),
+    el('tbody',{}, T.ledger.map(r=>el('tr',{}, el('td',{},day(r.start)), el('td',{},day(r.end)), el('td',{},['calm','watch','elevated','crisis'][r.max_level]), el('td',{},pc(r.further_fall)), el('td',{},spc(r.market_move_while_out)), el('td',{}, r.justified?'justified':'false alarm'))))))));
+  return box;
+}
+
 /* ---------- tab: decision ---------- */
 function buildDecision(p){
   const v=D.verdict, go=v.call==='REBALANCE';
@@ -225,6 +263,8 @@ function buildDecision(p){
     el('span',{class:'verdict '+(go?'go':'stay')}, go?'Rebalance':'Hold for now'),
     el('h1',{}, v.headline),
     el('p',{class:'lede'}, `Portfolio worth ${rs(D.nav)}. ${v.n_trades ? `The plan has ${v.n_trades} trades.` : 'No trades are needed.'} You make the final call.`)));
+
+  if (D.crash && D.crash.enabled) p.append(crashPanel(D.crash));
 
   const edge = v.delta==null ? null : v.delta*D.nav, fric = v.cost + v.tax;
   const maxv = Math.max(Math.abs(edge||0), fric, 1);
@@ -478,6 +518,7 @@ function buildReplay(p){
     tbl.append(el('thead',{},head), body);
     box.append(el('div',{class:'scroll'}, tbl), legend([{name:'Beat holding that year',color:css('--buy')},{name:'Lagged holding',color:css('--sell')}]), detail);
   }
+  if (D.crash && D.crash.test) p.append(crashTestPanel(D.crash.test));
   if (!B && !V && !S && !SA) p.append(el('p',{class:'muted'},'Run python main.py site to add the replay, and python main.py validate for the 10-year test.'));
   redraw.record = () => draws.forEach(f=>f());
 }
@@ -585,6 +626,13 @@ function buildMethod(p){
   const box=el('div',{class:'panel block'}); p.append(box); box.append(el('h2',{},'The formulas'));
   box.append(el('div',{}, ['regime','R','sigma','M','z','rule'].map(k=>el('div',{class:'formula'}, el('div',{class:'tex','data-f':k}), el('p',{class:'small muted'},F[k].say)))));
   box.append(el('p',{class:'small muted'}, `Settings: lookback ${P.lookback} trading days, skip ${P.skip}, top ${P.top_k} picks, 200-day trend average, drift threshold ${pc(theta,1)}, checks ${P.check_frequency}. Change them in config/settings.yaml.`));
+  if (D.crash && D.crash.enabled) p.append(el('div',{class:'panel block'}, el('h2',{},'The crash guard'),
+    el('p',{class:'small muted'},'Runs every day on top of the strategy. It reads six things that tend to show up in every large fall, whatever the cause: price damage, speed of the fall, volatility, breadth, credit stress and the biggest winners breaking.'),
+    el('ul',{class:'reasons'}, el('li',{}, el('b',{},'Watch: '), 'two points. No new money into risk assets.'),
+      el('li',{}, el('b',{},'Elevated: '), `three points from three signals, one of them a stress signal. Keeps ${pc(D.crash.assess.keep['2'],0)} of risk assets.`),
+      el('li',{}, el('b',{},'Crisis: '), `five points from four signals. Keeps ${pc(D.crash.assess.keep['3'],0)} and stops waiting for long-term tax status.`),
+      el('li',{}, el('b',{},'Coming back: '), 'a level steps down only after 15 straight days of lower readings, so a rebound does not trigger a round trip.')),
+    el('p',{class:'small muted'},'The shelter is cash (an arbitrage fund, taxed like equity) plus gold while gold is above its 200-day average. Settings are under strategy.crash in config/settings.yaml.')));
   const inp=el('div',{class:'panel block'}); p.append(inp); inp.append(el('h2',{},'Everything it weighed today'));
   const tone={ok:['Fine','hold'],warn:['Watch','warn'],bad:['Pushes to act','sell'],info:['Info','hold']};
   inp.append(el('div',{class:'two'}, D.factors.map(f=>el('div',{class:'block',style:'gap:4px'}, el('div',{style:'display:flex;gap:8px;align-items:center;flex-wrap:wrap'}, el('h3',{style:'margin:0'},f.name), el('span',{class:'chip '+tone[f.status][1]}, tone[f.status][0])), el('p',{},f.line), el('details',{style:'border:0;padding:0'}, el('summary',{},'More'), el('p',{class:'small muted'},f.detail))))));

@@ -22,6 +22,7 @@ POLICY_VARIANT = {
     "buy_hold": VARIANTS[1][0], "custom": VARIANTS[2][0], "dual_momentum": VARIANTS[3][0], "xs_momentum": VARIANTS[4][0],
     "trend_vol": VARIANTS[5][0], "risk_parity": VARIANTS[6][0], "daa": VARIANTS[7][0], "core_satellite": VARIANTS[8][0],
     "core_xs": VARIANTS[11][0], "static_mix": VARIANTS[12][0], "rp_blend": VARIANTS[13][0],
+    "buy_hold+guard": VARIANTS[14][0], "core_xs+guard": VARIANTS[15][0],
 }
 EXEC_RE = re.compile(r"^(\S+) (\d+)% of Rs ([\d,]+) @ ([\d,.]+) \[(\w+)\]")
 PLAN_RE = re.compile(r"^(buy|sell) (\S+) Rs ([\d,]+) \[(\w+)\] - (.*)$")
@@ -57,6 +58,8 @@ def _events(logs: list, settings: Settings) -> list[dict]:
 
 def _verdict(plan: Plan, settings: Settings, bt_table: pd.DataFrame | None, validation: dict | None) -> dict:
     pol = settings.strategy["policy"]
+    if settings.strategy.get("crash", {}).get("enabled") and "+" not in pol and pol + "+guard" in POLICY_VARIANT:
+        pol += "+guard"
     actionable = [t for t in plan.trades if not t.kind.startswith("harvest")]
     cost = sum(t.cost for t in plan.trades)
     tax = max(0.0, plan.tax_after - plan.tax_before)
@@ -366,6 +369,18 @@ def build(plan: Plan, settings: Settings, timing: list[str], px: pd.DataFrame, b
                                          "turnover": r["turnover_x"]} for n, r in table.iterrows()],
                             "events": evs, "px_dates": dates, "px": pxn, "active": POLICY_VARIANT.get(settings.strategy["policy"])}
     return data
+
+
+def crash_block(plan: Plan, settings: Settings, h, px: pd.DataFrame, vix, usd_inr: float | None, fy_realised: dict) -> dict | None:
+    """Crash guard status, the exit drills for the elevated and crisis levels, and the last `crash-test` if one was run."""
+    from . import crash
+    if not settings.strategy.get("crash"):
+        return None
+    a = plan.target.guard or crash.assess(px, vix, settings)
+    drills = {str(lv): crash.drill(h.lots, h.cash_inr, px, vix, settings, fy_realised, usd_inr, lv) for lv in (2, 3)}
+    tpath = ROOT / "reports" / "crash_test.json"
+    return {"assess": a, "drills": drills, "enabled": bool(settings.strategy["crash"]["enabled"]),
+            "test": json.loads(tpath.read_text()) if tpath.exists() else None, "plan_cuts": a["level"] >= 2}
 
 
 def _clean(o):

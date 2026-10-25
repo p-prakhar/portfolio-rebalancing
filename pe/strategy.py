@@ -21,6 +21,8 @@ class Target:
     regime: dict | None = None
     review: dict = field(default_factory=dict)   # custom policy: per-holding verdicts
     risk_reason: str = ""                         # one line on why risk is being cut
+    guard: dict | None = None                     # crash guard assessment (pe/crash.py)
+    urgent: bool = False                          # crisis: skip waiting for long-term tax status
 
 
 def _xs_sleeve(px: pd.DataFrame, settings: Settings, why: list[str]) -> tuple[dict[str, float], pd.DataFrame]:
@@ -61,9 +63,14 @@ def _xs_sleeve(px: pd.DataFrame, settings: Settings, why: list[str]) -> tuple[di
 
 
 def build_target(px: pd.DataFrame, vix: pd.Series | None, settings: Settings, policy: str | None = None,
-                 held_weights: dict[str, float] | None = None) -> Target:
+                 held_weights: dict[str, float] | None = None, guard_level: int | None = None, guard_mem: dict | None = None) -> Target:
+    """`policy+guard` runs the policy, then lets the crash guard (pe/crash.py) cut risk assets when warning signals stack up."""
     st = settings.strategy
     policy = policy or st["policy"]
+    if policy.endswith("+guard"):
+        from . import crash
+        t = build_target(px, vix, settings, policy[:-6], held_weights)
+        return crash.apply_guard(t, crash.assess(px, vix, settings, guard_level), px, settings, held_weights or {}, guard_mem)
     dm_cfg = st["dual_momentum"]
     reg = regime(px, vix, dm_cfg["equity"])
     dm = dual_momentum(px, dm_cfg["equity"], dm_cfg["gold"], dm_cfg["cash"], dm_cfg["lookback"], dm_cfg["sma"])

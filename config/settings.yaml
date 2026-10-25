@@ -96,6 +96,9 @@ universe:
   - {symbol: VEDL,       ticker: VEDL.NS,       name: "Vedanta (zinc, aluminium, silver)", tax_class: in_equity, venue: nse_stock, sleeve: metals, rotate: false}
   - {symbol: DIXON,      ticker: DIXON.NS,      name: "Dixon Technologies (electronics manufacturing)", tax_class: in_equity, venue: nse_stock, sleeve: semis, rotate: false}
   - {symbol: KAYNES,     ticker: KAYNES.NS,     name: "Kaynes Technology (electronics, OSAT push)", tax_class: in_equity, venue: nse_stock, sleeve: semis, rotate: false}
+  # Signal-only instruments for the crash guard's credit check (high-yield vs treasuries). Never bought.
+  - {symbol: HYG,  ticker: HYG,  name: "US high-yield bonds (credit-stress signal only)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: bonds, rotate: false}
+  - {symbol: IEF,  ticker: IEF,  name: "US 7-10y Treasuries (credit-stress signal only)", tax_class: foreign, venue: ibkr_us, currency: USD, sleeve: bonds, rotate: false}
   # Synthetic cash: accrues at cash.rate. Default models an ARBITRAGE FUND, which is taxed
   # like equity (20%/12.5%) instead of at slab like a liquid fund. See docs/EDGES.md.
   - {symbol: CASH, ticker: null, name: "Cash sleeve (arbitrage fund proxy)", tax_class: in_equity, venue: cash_fund, sleeve: cash}
@@ -140,6 +143,35 @@ strategy:
     risky: [NIFTYBEES, MID150BEES, MOM30IETF, LOWVOLIETF, SPY, QQQ, EFA, EEM, GOLDBEES]
     defensive: [CASH, GOLDBEES, TLT]
     top_risky: 3
+  # --- crash guard (pe/crash.py): early-warning signals and a fast, tax-aware exit into a shelter, applied on top of any policy ---
+  # Fixed in advance from standard textbook values, not tuned on any history. Set enabled: false to run the policies bare.
+  crash:
+    enabled: true
+    proxy: {NIFTYBEES: 0.6, SPY: 0.4}     # market proxy the signals read (weights renormalised to what has data)
+    dd_watch: 0.10                 # drawdown from the 52-week high; with a break below the 200-day average, "price damage" is worth 2 points
+    dd_deep: 0.18
+    fast_5d: 0.05                  # a 5% fall in 5 days, or 8% in 10, scores a point
+    fast_10d: 0.08
+    vol_ratio: 1.6                 # 20-day volatility vs 1-year volatility
+    vol_floor: 0.20                # ...and above this annualised level
+    vix_ratio: 1.4                 # India VIX vs its 60-day average
+    vix_floor: 20
+    breadth_sleeves: [india_equity, global_equity]
+    breadth_share: 0.60            # share of equity instruments below their 200-day average
+    credit_gap: 0.02               # HYG/IEF this far under its 100-day average
+    leader_sleeves: [india_equity, global_equity, semis, metals]
+    leader_dd: 0.10
+    froth_min: 0.12                # extension above the 200-day average that counts as froth (and must be in the top 5% of 3 years)
+    watch_at: 2                    # warning points for each level (one less after a run-up)
+    elevated_at: 3
+    crisis_at: 5
+    elevated_families: 3           # independent signal families that must be on (price damage, speed, volatility, breadth, credit, leaders)
+    crisis_families: 4
+    exit_days: 15                  # consecutive lower readings before the level steps down one notch
+    keep: {2: 0.75, 3: 0.25}       # share of risk assets kept at each level
+    shelter_gold: GOLDBEES
+    gold_share_of_shelter: 0.4     # gold takes at most this share of the freed money, only while above its 200-day average
+    gold_max_weight: 0.20
   min_trade_weight: 0.03         # ignore drifts smaller than 3% of the portfolio
   expected_alpha_shrink: 0.25    # haircut on trailing momentum spread when estimating edge
   alpha_cap: 0.12                # never assume more than 12%/yr excess from a switch

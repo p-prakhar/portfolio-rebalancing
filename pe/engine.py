@@ -16,6 +16,7 @@ from .tax import (BUCKETS, bucket_for, compute_tax, effective_rate, fy_end, is_l
                   lt_date, marginal_tax)
 
 RISK_SLEEVES = {"india_equity", "global_equity"}
+SAFE_SLEEVES = {"gold", "bonds", "cash"}
 
 
 @dataclass
@@ -112,9 +113,15 @@ def _pick_lots(lots: list[Lot], qty: float, price: float, tax_class: str, today:
 
 def make_plan(today_ts, lots: list[Lot], cash_inr: float, px_hist: pd.DataFrame, vix: pd.Series | None,
               settings: Settings, fy_realised: dict | None = None, policy: str | None = None,
-              harvest: bool = True, lrs_used: float = 0.0, usd_inr: float | None = None) -> Plan:
+              harvest: bool = True, lrs_used: float = 0.0, usd_inr: float | None = None, guard_level: int | None = None, guard_mem: dict | None = None) -> Plan:
+    """policy=None is the live path: it uses the configured policy and adds the crash guard when strategy.crash.enabled.
+    Backtests pass explicit policies, so their results only include the guard where a variant asks for `+guard`."""
     today = _d(today_ts)
     st, tm, tx = settings.strategy, settings.timing, settings.tax
+    live = policy is None
+    policy = policy or st["policy"]
+    if not policy.endswith("+guard") and (guard_level is not None or (live and st.get("crash", {}).get("enabled"))):
+        policy += "+guard"
     px_now = px_hist.iloc[-1]
     fy_realised = {b: float((fy_realised or {}).get(b, 0.0)) for b in BUCKETS}
     running = dict(fy_realised)
@@ -123,7 +130,10 @@ def make_plan(today_ts, lots: list[Lot], cash_inr: float, px_hist: pd.DataFrame,
     pos = positions_table(lots, px_now, today, settings)
     held = pos.groupby("symbol")["value"].sum().to_dict() if not pos.empty else {}
     nav = sum(held.values()) + cash_inr
-    target = build_target(px_hist, vix, settings, policy, {k: v / nav for k, v in held.items()} if nav > 0 else {})
+    held_w = {k: v / nav for k, v in held.items()} if nav > 0 else {}
+    if cash_inr > 0 and nav > 0 and policy.endswith("+guard"):
+        held_w["CASH"] = held_w.get("CASH", 0.0) + cash_inr / nav
+    target = build_target(px_hist, vix, settings, policy, held_w, guard_level, guard_mem)
     ta = analyse_all(px_hist, list(held) + list((target.weights or {}).keys()))
     alpha = _alpha(px_hist, settings)
     vol6 = px_hist.pct_change().iloc[-126:].std() * np.sqrt(252)
@@ -164,14 +174,14 @@ def make_plan(today_ts, lots: list[Lot], cash_inr: float, px_hist: pd.DataFrame,
             p = float(px_now[s])
             value = held[s] if full_exit else -d
             pieces = _pick_lots(by_sym[s], value / p, p, a.tax_class, today, settings)
-            risk_exit = target.risk_off and a.sleeve in RISK_SLEEVES and tw.get(s, 0.0) < held[s] / nav
+            risk_exit = target.risk_off and (a.sleeve in RISK_SLEEVES or (target.guard and a.sleeve not in SAFE_SLEEVES)) and tw.get(s, 0.0) < held[s] / nav
             keep, gains, why = [], {b: 0.0 for b in BUCKETS}, []
             for lot, q in pieces:
                 lt = is_long_term(lot, a.tax_class, today, settings)
                 g = q * (p - lot.price)
                 ltd = lt_date(lot, a.tax_class, settings)
                 days = (ltd - today).days if ltd and not lt else 0
-                if not lt and ltd and 0 < days <= tm["ltcg_wait_max_days"] and g > 0:
+                if not lt and ltd and 0 < days <= tm["ltcg_wait_max_days"] and g > 0 and not target.urgent:
                     w, *_rest, w_why = ltcg_wait(g, q * p, days, float(vol6.get(s, 0.2)),
                                                  effective_rate(bucket_for(a.tax_class, False), settings),
                                                  effective_rate(bucket_for(a.tax_class, True), settings), risk_exit)

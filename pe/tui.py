@@ -39,6 +39,8 @@ COMMANDS = {
     "mf": "your mutual funds: regular or direct, and whether switching pays",
     "add-other": "add PPF, EPF, NPS, gold, property and anything else",
     "check": "today's plan as text",
+    "crash": "crash guard: early-warning signals and what a fast exit would cost today",
+    "crash-test": "replay past falls: drawdown saved vs false-alarm cost (slow first time)",
     "site": "build and open the visual decision page",
     "backtest": "12-month replay of every strategy",
     "validate": "10-year robustness test (slow first time)",
@@ -408,6 +410,10 @@ def dispatch(cmd: str) -> bool:
         print(WHERE)
     elif cmd == "check":
         M.cmd_run(_ns())
+    elif cmd == "crash":
+        M.cmd_crash(_ns())
+    elif cmd == "crash-test":
+        M.cmd_crash_test(Namespace(years=10, refresh=False, demo=False, scenario="bubble_burst"))
     elif cmd == "site":
         import webbrowser
         out = M.cmd_site(_ns())
