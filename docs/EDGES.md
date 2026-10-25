@@ -33,8 +33,9 @@ real contest is our engine against an index fund, not against the best fund.
 1. **Tax timing is ours.** Funds pass gains straight through; we choose when to realise them: the yearly LTCG
    exemption harvest (A1), loss harvesting with no wash-sale rule (A4), waiting for long-term status (A5),
    spending new money before selling (A6), and gifting units to family (A2). Validation: buy and hold plus
-   harvesting gave about 0.4 points a year over plain holding (10.9% vs 10.4% after tax), the only edge that
-   repeated across windows (and it has not yet been tested for significance on this data).
+   harvesting gave about 0.5 points a year over plain holding (10.8% vs 10.3% after tax, FIFO lots, run 25 Oct 2026),
+   with a 90% bootstrap range of +0.4 to +0.5 points. It is the only variant that earns "robust edge"; every rotation
+   strategy's range includes zero. The range is narrow because harvesting is tax mechanics, not a market bet.
 2. **No capacity limit and no mandate.** Funds hold a benchmark and a style; we can sit in cash, gold or
    US assets when trend breaks (D1). Small-cap funds have closed to lump sums because there are too few
    liquid small caps for their size, so impact cost is real for them and not for Rs 50k positions
@@ -82,8 +83,7 @@ units of an ISIN first, per demat account or folio, for shares and fund units al
 ([5paisa](https://www.5paisa.com/stock-market-guide/tax/fifo-in-demat), [Outlook Money](https://www.outlookmoney.com/tax/tax-saving-tips-why-having-only-one-demat-account-can-make-you-lose-profit-from-your-equities);
 these are secondary sources, so confirm with a CA). The engine used to pick the cheapest lot; it now defaults to
 `tax.lot_method: fifo` and harvests only the oldest lot of each holding. Holding lots in separate demat accounts is
-the way to regain choice, and `lot_method: specific` models that case. Earlier validation numbers assumed free lot
-choice and should be re-run.
+the way to regain choice, and `lot_method: specific` models that case. The validation figures quoted here were re-run on live data after the change.
 
 
 ## A. Tax edges: the largest and most reliable
