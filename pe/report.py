@@ -7,6 +7,7 @@ from pathlib import Path
 import pandas as pd
 
 from .config import Settings
+from .forward import forward_lines, holdings_xirr
 from .engine import Plan
 from .tax import compute_tax, fy_end
 
@@ -36,7 +37,7 @@ def _md_table(df: pd.DataFrame, floatfmt: dict | None = None) -> str:
     return "\n".join(lines)
 
 
-def live_report(plan: Plan, settings: Settings, timing_lines: list[str], demo: bool, data_note: str) -> str:
+def live_report(plan: Plan, settings: Settings, timing_lines: list[str], demo: bool, data_note: str, px=None) -> str:
     t = plan.target
     out = [f"# Portfolio check: {plan.as_of}", ""]
     if demo:
@@ -65,7 +66,13 @@ def live_report(plan: Plan, settings: Settings, timing_lines: list[str], demo: b
         out.append(_md_table(show, {"qty": "{:,.2f}", "cost": "{:,.0f}", "value": "{:,.0f}", "gain": "{:,.0f}", "gain_pct": "{:+.1%}"}))
         res = compute_tax({**{b: 0.0 for b in plan.fy_realised}, **plan.positions.groupby("bucket").gain.sum().to_dict()}, settings)
         out.append(f"\nTotal value **{rs(plan.nav)}**. If you sold everything today (and had no other gains this FY), "
-                   f"tax would be about **{rs(res.tax)}**, after using {rs(res.exemption_used)} of the LTCG exemption.\n")
+                   f"tax would be about **{rs(res.tax)}**, after using {rs(res.exemption_used)} of the LTCG exemption.")
+        xr = holdings_xirr(plan.positions, plan.as_of)
+        if xr is not None:
+            out.append(f"Your money-weighted return since each purchase (XIRR, before tax on sale): **{xr:+.1%} a year**.")
+        out.append("")
+        if px is not None and not demo:
+            out += forward_lines(plan.positions, px)
 
     out.append("## Technical and momentum review of each holding\n")
     held_syms = list(dict.fromkeys(plan.positions.symbol)) if not plan.positions.empty else []
