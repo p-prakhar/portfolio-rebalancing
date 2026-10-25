@@ -33,3 +33,20 @@ A rule is called a switcher worth using only if all hold: bootstrap 90% range of
 - The strategies were themselves designed and screened on the same history, so every number is optimistic.
 - Sleeve curves already contain their own internal tax, so tax on sleeve gains is approximated. Losses are not refunded.
 - Rolling windows overlap and are not independent.
+
+## Result on real prices (2017-10 to 2026-10, 9 years, 13 variants tried)
+
+Verdict: **do not switch automatically.** None of the four rules passed the gate.
+
+| rule | per year after tax | worst fall | gap vs equal blend | deflated Sharpe |
+|---|---|---|---|---|
+| momentum_switch | 11.5% | -35.2% | +0.1% (range -6.5 to +7.4) | 0.06 |
+| equal_weight (baseline) | 10.4% | -18.9% | - | - |
+| hedge | 9.4% | -22.7% | -1.5% | 0.00 |
+| inverse_vol | 6.8% | -6.0% | -3.8% | 0.00 |
+
+- Momentum switching matched the blend before tax drag but paid about twice the tax and costs for it, and its worst fall equalled holding Nifty alone.
+- Hedge beat the blend in 8 of 12 rolling windows by a median of 0.3 points, well inside the noise.
+- Every single strategy also failed the gate against the blend (deflated Sharpe at most 0.27). The year-by-year table shows winners rotate, so last year's leader says little about next year's.
+- The equal blend beat just holding Nifty in all 12 rolling windows (median +3.5 points a year) with a much smaller worst fall. That is the practical answer: spread across the strategies, rebalance rarely, and do not chase the leader.
+- Caveat: these strategies were designed and screened on the same history, so the blend's edge over holding is probably overstated too.
