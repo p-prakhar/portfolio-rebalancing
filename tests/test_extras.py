@@ -32,6 +32,45 @@ def test_etrade_vests_to_lots_and_sold_removed(tmp_path):
     assert meta["ACME"]["currency"] == "USD" and meta["ACME"]["tax_class"] == "foreign"
 
 
+def test_etrade_xlsx_reads_espp_and_rsu_sheets(tmp_path):
+    """Morgan Stanley Benefit History xlsx: ESPP is sheet 1, RSUs are sheet 2 with duplicate headers."""
+    f = tmp_path / "BenefitHistory.xlsx"
+    espp = pd.DataFrame({
+        "Record Type": ["Purchase", "Event", "Purchase"],
+        "Symbol": ["ACME", None, "ACME"],
+        "Purchase Date": ["14-JUL-2026", None, "12-FEB-2025"],
+        "Purchased Qty.": [69, None, 26],
+        "Net Shares": [69, None, 26],
+        "Purchase Date FMV": ["$65.10", None, "$68.00"],
+        "Date": [None, "07/14/2026", None],
+        "Event Type": [None, "PURCHASE", None],
+        "Qty": [None, 69, None],
+    })
+    rsu = pd.DataFrame([
+        {"Record Type": "Grant", "Grant Number": "R1", "Vested Qty.": 20, "Sellable Qty.": 14},
+        {"Record Type": "Event", "Grant Number": "R1", "Date": "08/11/2025", "Event Type": "Shares vested", "Qty. or Amount": 20},
+        {"Record Type": "Vest Schedule", "Grant Number": "R1", "Vest Period": 1, "Vest Date": "08/11/2025",
+         "Vested Qty.": 20, "Sellable Qty.": 14},
+        {"Record Type": "Tax Withholding", "Grant Number": "R1", "Vest Period": 1, "Taxable Gain": 1200.00},
+        {"Record Type": "Vest Schedule", "Grant Number": "R1", "Vest Period": 2, "Vest Date": "11/10/2026",
+         "Vested Qty.": 0, "Sellable Qty.": 0},
+    ])
+    # Expanded export repeats Vested Qty. / Sellable Qty. in the schedule block; pandas suffixes the second copy.
+    rsu["Vested Qty."] = rsu["Vested Qty."]
+    rsu.insert(len(rsu.columns), "Vested Qty.", [None, None, 20, None, 0], allow_duplicates=True)
+    with pd.ExcelWriter(f, engine="openpyxl") as w:
+        espp.to_excel(w, sheet_name="ESPP", index=False)
+        rsu.to_excel(w, sheet_name="Restricted Stock", index=False)
+    lots, meta, warns = lots_from_etrade(str(f), "acme", lambda d: 80.0)
+    by_date = {l["buy_date"]: l for l in lots}
+    assert set(by_date) == {"2025-02-12", "2025-08-11", "2026-07-14"}
+    assert by_date["2026-07-14"]["qty"] == 69 and by_date["2026-07-14"]["price"] == 5208.0   # 65.10 * 80
+    assert by_date["2025-02-12"]["qty"] == 26 and by_date["2025-02-12"]["price"] == 5440.0   # 68.00 * 80
+    assert by_date["2025-08-11"]["qty"] == 14 and by_date["2025-08-11"]["price"] == 4800.0   # (1200.00/20)*80
+    assert meta["ACME"]["tax_class"] == "foreign"
+    assert not any("No open lots" in w for w in warns)
+
+
 def test_merge_lots_replaces_symbol_and_keeps_rest(tmp_path):
     p = tmp_path / "h.yaml"
     merge_lots([{"symbol": "A", "qty": 1, "buy_date": "2024-01-01", "price": 10}, {"symbol": "B", "qty": 2, "buy_date": "2024-01-01", "price": 5}], path=p)
