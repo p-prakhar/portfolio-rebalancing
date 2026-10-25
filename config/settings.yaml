@@ -144,9 +144,11 @@ strategy:
     defensive: [CASH, GOLDBEES, TLT]
     top_risky: 3
   # --- crash guard (pe/crash.py): early-warning signals and a fast, tax-aware exit into a shelter, applied on top of any policy ---
-  # Fixed in advance from standard textbook values, not tuned on any history. Set enabled: false to run the policies bare.
+  # Fixed in advance from standard textbook values, not tuned on any history. OFF by default: on 10 years of real data every
+  # configuration tried lowered return versus the core strategy (see docs/CRASH_GUARD.md). The signals still show on the report as warnings.
+  # Set enabled: true to let it cut risk (opt-in drawdown insurance).
   crash:
-    enabled: true
+    enabled: false
     proxy: {NIFTYBEES: 0.6, SPY: 0.4}     # market proxy the signals read (weights renormalised to what has data)
     dd_watch: 0.10                 # drawdown from the 52-week high; with a break below the 200-day average, "price damage" is worth 2 points
     dd_deep: 0.18

@@ -222,7 +222,7 @@ addEventListener('resize',()=>{ const cur=TABS.find(t=>!$('#panel-'+t.id).hidden
 const LEVEL_TONE={calm:['Calm','hold'],watch:['Watch','warn'],elevated:['Elevated','warn'],crisis:['Crisis','sell']};
 function crashPanel(C){
   const a=C.assess, tone=LEVEL_TONE[a.label], d2=C.drills['2'], d3=C.drills['3'], drill=a.level>=2?C.drills[String(a.level)]:d3;
-  const lead = a.level>=2 ? `The guard is cutting risk now. It keeps ${pc(a.keep[a.level],0)} of your risk assets and moves the rest to cash and gold.`
+  const lead = !C.enabled ? (a.level>=2 ? 'Warning only: the guard is switched off, so nothing is being sold. Turn it on in config/settings.yaml (strategy.crash.enabled) if you want it to cut risk.' : 'Warning only: the guard is switched off. No warning signals are stacking up.') : a.level>=2 ? `The guard is cutting risk now. It keeps ${pc(a.keep[a.level],0)} of your risk assets and moves the rest to cash and gold.`
     : a.level===1 ? 'No new money goes into risk assets until this clears. Nothing is sold.' : 'No warning signals are stacking up. Nothing changes.';
   const on=a.families.filter(f=>f.points>0).length;
   const box=el('div',{class:'panel block'},
@@ -264,7 +264,7 @@ function buildDecision(p){
     el('h1',{}, v.headline),
     el('p',{class:'lede'}, `Portfolio worth ${rs(D.nav)}. ${v.n_trades ? `The plan has ${v.n_trades} trades.` : 'No trades are needed.'} You make the final call.`)));
 
-  if (D.crash && D.crash.enabled) p.append(crashPanel(D.crash));
+  if (D.crash) p.append(crashPanel(D.crash));
 
   const edge = v.delta==null ? null : v.delta*D.nav, fric = v.cost + v.tax;
   const maxv = Math.max(Math.abs(edge||0), fric, 1);
@@ -626,7 +626,7 @@ function buildMethod(p){
   const box=el('div',{class:'panel block'}); p.append(box); box.append(el('h2',{},'The formulas'));
   box.append(el('div',{}, ['regime','R','sigma','M','z','rule'].map(k=>el('div',{class:'formula'}, el('div',{class:'tex','data-f':k}), el('p',{class:'small muted'},F[k].say)))));
   box.append(el('p',{class:'small muted'}, `Settings: lookback ${P.lookback} trading days, skip ${P.skip}, top ${P.top_k} picks, 200-day trend average, drift threshold ${pc(theta,1)}, checks ${P.check_frequency}. Change them in config/settings.yaml.`));
-  if (D.crash && D.crash.enabled) p.append(el('div',{class:'panel block'}, el('h2',{},'The crash guard'),
+  if (D.crash) p.append(el('div',{class:'panel block'}, el('h2',{},'The crash guard'),
     el('p',{class:'small muted'},'Runs every day on top of the strategy. It reads six things that tend to show up in every large fall, whatever the cause: price damage, speed of the fall, volatility, breadth, credit stress and the biggest winners breaking.'),
     el('ul',{class:'reasons'}, el('li',{}, el('b',{},'Watch: '), 'two points. No new money into risk assets.'),
       el('li',{}, el('b',{},'Elevated: '), `three points from three signals, one of them a stress signal. Keeps ${pc(D.crash.assess.keep['2'],0)} of risk assets.`),
