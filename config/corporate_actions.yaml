@@ -1,0 +1,79 @@
+# Corporate actions: demergers, spin-offs, splits, and mergers.
+# Automatically applied to tax lots in holdings and tradebook imports.
+#
+# Schema:
+#   demergers:
+#     - parent: symbol before the event
+#       date: record date (YYYY-MM-DD)
+#       name: descriptive title
+#       keep_parent: false if parent is delisted/replaced; true if parent remains listed
+#       parent_cost_share: (optional) fraction of cost retained by parent when keep_parent is true
+#       resulting: list of resulting entities:
+#         - symbol: new stock symbol
+#           name: company name
+#           ratio: shares received per 1 parent share held
+#           cost_share: fraction of original cost of acquisition (under Sec 49(2C)/(2D) of IT Act)
+#           ticker: Yahoo finance ticker (defaults to <symbol>.NS)
+#           tax_class: in_equity | in_other | foreign (defaults to in_equity)
+#           venue: nse_stock | nse_etf | ibkr_us (defaults to nse_stock)
+#           sleeve: india_equity | global_equity | metals etc.
+#
+#   splits:
+#     - symbol: stock symbol
+#       date: ex-date
+#       ratio: multiplier for quantity (e.g. 5.0 for a 1:5 split; price is divided by ratio)
+#       name: description
+#
+#   mergers:
+#     - old_symbol: acquired or merged entity symbol
+#       new_symbol: surviving entity symbol
+#       date: record date
+#       ratio: new shares per 1 old share (price is divided by ratio)
+#       name: description
+
+demergers:
+  - parent: TATAMOTORS
+    date: "2025-10-14"
+    name: "Tata Motors demerger into Passenger Vehicles (TMPV) and Commercial Vehicles (TMCV)"
+    keep_parent: false
+    resulting:
+      - symbol: TMPV
+        name: "Tata Motors Passenger Vehicles"
+        ratio: 1.0
+        cost_share: 0.6885
+        ticker: "TMPV.NS"
+        tax_class: "in_equity"
+        venue: "nse_stock"
+        sleeve: "india_equity"
+      - symbol: TMCV
+        name: "Tata Motors Commercial Vehicles"
+        ratio: 1.0
+        cost_share: 0.3115
+        ticker: "TMCV.NS"
+        tax_class: "in_equity"
+        venue: "nse_stock"
+        sleeve: "india_equity"
+
+  - parent: RELIANCE
+    date: "2023-07-20"
+    name: "Reliance Industries spin-off of Jio Financial Services (JIOFIN)"
+    keep_parent: true
+    parent_cost_share: 0.9532
+    resulting:
+      - symbol: JIOFIN
+        name: "Jio Financial Services"
+        ratio: 1.0
+        cost_share: 0.0468
+        ticker: "JIOFIN.NS"
+        tax_class: "in_equity"
+        venue: "nse_stock"
+        sleeve: "india_equity"
+
+splits: []
+
+mergers:
+  - old_symbol: HDFC
+    new_symbol: HDFCBANK
+    date: "2023-07-13"
+    ratio: 1.68
+    name: "HDFC Ltd merger into HDFC Bank (42 HDFCBANK shares per 25 HDFC shares)"

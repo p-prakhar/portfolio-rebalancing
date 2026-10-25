@@ -13,6 +13,7 @@ config/profile.yaml
 config/other_assets.yaml
 state/history
 data/cache*/
+data/valuation/
 config/fds.yaml
 # personal statements, never commit
 *.xlsx

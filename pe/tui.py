@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import glob
 import os
+import shlex
 import sys
 import tempfile
 from argparse import Namespace
@@ -52,7 +53,7 @@ COMMANDS = {
     "simulate": "follow every strategy daily for 10, 5 and 2 years (a few minutes)",
     "timing": "compare ways of deciding when to rebalance (slow)",
     "switch": "test an automatic strategy switcher (run simulate first)",
-    "forecast": "test valuation and forecast overlays (slow)",
+    "actions": "demergers, stock splits and mergers affecting your portfolio",
     "where": "where to find each number you need",
     "help": "list commands",
     "quit": "leave",
@@ -61,7 +62,7 @@ COMMANDS = {
 GROUPS = [
     ("Start here", ["next", "setup", "status", "where"]),
     ("About you", ["profile", "income"]),
-    ("Load what you own", ["import-kite", "import-etrade", "import-mf", "add-fd", "add-mf", "add-lot", "add-other"]),
+    ("Load what you own", ["import-kite", "import-etrade", "import-mf", "add-fd", "add-mf", "add-lot", "add-other", "actions"]),
     ("See your savings", ["fds", "mf"]),
     ("Decide", ["site", "check", "crash"]),
     ("Research (slower)", ["backtest", "validate", "simulate", "compare", "crash-test", "timing", "switch", "forecast", "gold", "silver"]),
@@ -152,8 +153,17 @@ def _date(prompt: str) -> date:
 
 def _paths(prompt: str) -> list[str]:
     a = _ask(prompt, PathCompleter(expanduser=True) if HAVE_PT else None)
+    # Try the entire input as a single path/glob first (handles unquoted spaces)
+    whole = glob.glob(os.path.expanduser(a.strip())) or []
+    if whole:
+        return [p for p in sorted(whole) if os.path.isfile(p)]
+    # Fall back to shell-style splitting (respects quotes around spaced paths)
     out = []
-    for p in a.split():
+    try:
+        parts = shlex.split(a)
+    except ValueError:
+        parts = a.split()
+    for p in parts:
         out += sorted(glob.glob(os.path.expanduser(p))) or [os.path.expanduser(p)]
     return [p for p in out if os.path.isfile(p)]
 
@@ -411,6 +421,32 @@ def do_status() -> None:
         print("\n(Showing the example holdings. Import yours to replace them.)")
 
 
+def do_corporate_actions() -> None:
+    from .corporate_actions import Demerger, Merger, Split, load_corporate_actions, sync_holdings_file
+    actions = load_corporate_actions()
+    events = actions.all_events_sorted()
+    if not events:
+        print("No corporate actions configured.")
+        return
+    print("\nCorporate actions (config/corporate_actions.yaml):")
+    for ev in events:
+        if isinstance(ev, Demerger):
+            res_str = ", ".join(f"{r.symbol} ({r.ratio:g}:1, {r.cost_share:.2%} cost)" for r in ev.resulting)
+            print(f"  {ev.date}  Demerger: {ev.parent} -> {res_str}")
+            print(f"             {ev.name}")
+        elif isinstance(ev, Split):
+            print(f"  {ev.date}  Split: {ev.symbol} {ev.ratio:g}:1 ({ev.name})")
+        elif isinstance(ev, Merger):
+            print(f"  {ev.date}  Merger: {ev.old_symbol} -> {ev.new_symbol} ({ev.ratio:g}:1)")
+    changed, notices = sync_holdings_file()
+    if changed:
+        print("\nUpdated holdings.yaml:")
+        for n in notices:
+            print(f"  - {n}")
+    else:
+        print("\nHoldings lots are current.")
+
+
 def _say(text: str, style: str = "") -> None:
     try:
         from rich.console import Console
@@ -530,6 +566,8 @@ def dispatch(cmd: str) -> bool:
         do_mf()
     elif cmd == "status":
         do_status()
+    elif cmd in ("actions", "corporate-actions"):
+        do_corporate_actions()
     elif cmd == "where":
         print(WHERE)
     elif cmd == "check":

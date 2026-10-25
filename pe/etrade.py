@@ -62,14 +62,15 @@ def _rsu_vests(df: pd.DataFrame) -> tuple[list, float]:
     find = lambda name, nth=0: [c for c in cols if str(c).strip().lower().startswith(name)][nth]
     c_grant, c_period, c_vdate = find("grant number"), find("vest period"), find("vest date")
     c_vested = [c for c in cols if str(c).strip().lower().startswith("vested qty")][-1]   # the vest-section column, not the grant total
-    c_gain, c_wh = find("taxable gain"), find("withholding amount")
+    c_gain = find("taxable gain")
+    c_wh = next((c for c in cols if str(c).strip().lower().startswith("withholding amount")), None)
     sellable_cols = [c for c in cols if str(c).strip().lower().startswith("sellable qty")]
-    sellable = float(pd.to_numeric(df.loc[rt == "grant", sellable_cols[0]], errors="coerce").fillna(0).sum()) if sellable_cols else 0.0
+    sellable = float(pd.to_numeric(df.loc[rt == "grant", sellable_cols[0]], errors="coerce").fillna(0).sum()) if sellable_cols else None
     num = lambda v: pd.to_numeric(str(v).replace("$", "").replace(",", ""), errors="coerce")
     gains, withheld = {}, {}
     for _, r in df[rt == "tax withholding"].iterrows():
         k = (str(r[c_grant]), str(r[c_period]))
-        g, w = num(r[c_gain]), num(r[c_wh])
+        g, w = num(r[c_gain]), (num(r[c_wh]) if c_wh is not None else float("nan"))
         if pd.notna(g):
             gains[k] = gains.get(k, 0.0) + float(g)
         if pd.notna(w):
@@ -83,7 +84,11 @@ def _rsu_vests(df: pd.DataFrame) -> tuple[list, float]:
         k = (str(r[c_grant]), str(r[c_period]))
         g = gains.get(k)
         fmv = g / vested if g else None
-        net = float(vested) - (round(withheld.get(k, 0.0) / fmv) if fmv else 0)
+        if k in withheld and fmv:
+            net = float(vested) - round(withheld[k] / fmv)          # sell-to-cover shares never reach you
+        else:
+            vs = pd.to_numeric(r[sellable_cols[-1]], errors="coerce") if sellable_cols else float("nan")
+            net = float(vs) if pd.notna(vs) and vs > 0 else float(vested)
         out.append((d, net, fmv, f"RSU vest {d} (grant {r[c_grant]})"))
     return out, sellable
 
@@ -98,7 +103,7 @@ def _espp_purchases(df: pd.DataFrame) -> tuple[list, float]:
     c_qty = [c for c in cols if str(c).strip().lower().startswith("net shares")] or [c for c in cols if str(c).strip().lower().startswith("purchased qty")]
     c_qty = c_qty[0]
     sell = [c for c in cols if str(c).strip().lower().startswith("sellable qty")]
-    out, sellable = [], 0.0
+    out, sellable = [], (0.0 if sell else None)
     for _, r in df[rt == "purchase"].iterrows():
         d = _date(r[c_date])
         q = pd.to_numeric(r[c_qty], errors="coerce")
@@ -125,7 +130,8 @@ def lots_from_benefit_history(path: str, ticker: str, usd_inr: Callable[[date], 
         if df is not None and not df.empty:
             r, s = fn(df)
             rows += r
-            sellable += s
+            # a sheet without a sellable column is taken as fully held
+            sellable += s if s is not None else sum(q for _, q, _, _ in r)
     rows.sort(key=lambda x: x[0])
     total = sum(q for _, q, _, _ in rows)
     sold = max(0.0, total - sellable) if sellable else 0.0

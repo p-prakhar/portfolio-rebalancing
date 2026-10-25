@@ -60,7 +60,8 @@ def positions_table(lots: list[Lot], px_now: pd.Series, today: date, settings: S
     rows = []
     for lot in lots:
         a = settings.assets[lot.symbol]
-        p = float(px_now[lot.symbol])
+        p_val = px_now.get(lot.symbol) if hasattr(px_now, "get") else None
+        p = float(lot.price) if (p_val is None or pd.isna(p_val)) else float(p_val)
         lt = is_long_term(lot, a.tax_class, today, settings)
         ltd = lt_date(lot, a.tax_class, settings)
         gain = lot.qty * (p - lot.price)
@@ -172,7 +173,7 @@ def make_plan(today_ts, lots: list[Lot], cash_inr: float, px_hist: pd.DataFrame,
                     tw[s] = tw.get(s, 0.0) + w * v / sum(held_g.values())
         band = st["min_trade_weight"] * nav
         diffs = {s: tw.get(s, 0.0) * nav - held.get(s, 0.0) for s in set(tw) | set(held)}
-        buys = {s: d for s, d in diffs.items() if d > band and not settings.assets[s].sell_only}
+        buys = {s: d for s, d in diffs.items() if d > band and not settings.assets[s].sell_only and pd.notna(px_now.get(s))}
         buy_total = sum(buys.values()) or 1.0
         a_buy = sum(alpha.get(s, 0.0) * v for s, v in buys.items()) / buy_total if buys else alpha.get("CASH", 0.0)
         buy_cost_rate = (sum(leg_cost(settings, settings.assets[s], "buy", v, float(px_now[s]), usd_inr)
@@ -185,7 +186,11 @@ def make_plan(today_ts, lots: list[Lot], cash_inr: float, px_hist: pd.DataFrame,
             if d >= 0 or (-d < band and not full_exit):
                 continue
             a = settings.assets[s]
-            p = float(px_now[s])
+            p_val = px_now.get(s) if hasattr(px_now, "get") else None
+            if p_val is None or pd.isna(p_val):
+                blocked.append(f"CANNOT SELL {s}: no market price on {today} (not yet trading or delisted)")
+                continue
+            p = float(p_val)
             value = held[s] if full_exit else -d
             pieces = _pick_lots(by_sym[s], value / p, p, a.tax_class, today, settings)
             risk_exit = target.risk_off and (a.sleeve in RISK_SLEEVES or (target.guard and a.sleeve not in SAFE_SLEEVES)) and tw.get(s, 0.0) < held[s] / nav
