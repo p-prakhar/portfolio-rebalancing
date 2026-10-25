@@ -13,9 +13,9 @@ and a `domicile` (US or IE). Validate before changing `rotate`, using `python ma
 |---|---|---|---|---|---|
 | US large cap | SPY, CSPX (S&P 500) | US, IE | Capital gains: no US tax; India 12.5% after 24 months. Dividends: 25% US withholding with W-8BEN, India slab with Form 67 credit | `ibkr_us`, `ibkr_ucits` | CSPX is the estate-tax-safe version. `equivalent_of` links the pair for harvesting |
 | US Nasdaq 100 | QQQ, CNDX | US, IE | Same | `ibkr_us`, `ibkr_ucits` | India also has MON100 on NSE (no LRS, but premium risk) |
-| Developed world | SWDA, EFA | IE, US | Same. SWDA is about 70% US, so it overlaps the S&P | `ibkr_ucits`, `ibkr_us` | |
+| Developed world | IWDA, EFA | IE, US | Same. IWDA is about 70% US, so it overlaps the S&P | `ibkr_ucits`, `ibkr_us` | |
 | All-world | VWRA | IE | One fund, accumulating, includes emerging markets | `ibkr_ucits` | Simplest single global holding |
-| Europe | via SWDA / VWRA | IE | Direct European stocks fail the tests below; broad exposure comes inside the world funds | | No European-only fund in the list on purpose |
+| Europe | via IWDA / VWRA | IE | Direct European stocks fail the tests below; broad exposure comes inside the world funds | | No European-only fund in the list on purpose |
 | Japan | EWJ | US | US-listed, USD, standard US treatment. Japan withholding is handled inside the fund | `ibkr_us` | US-domiciled, so it counts toward the USD 60,000 estate-tax threshold |
 | Emerging markets | EIMI, EEM | IE, US | Taiwan, Korea, China, India exposure inside the fund; the fund absorbs foreign withholding | `ibkr_ucits`, `ibkr_us` | EIMI includes India, which overlaps your domestic holdings |
 | Gold | IGLN, GLD | IE, US | Physical-gold ETC; gain taxed as foreign asset (no dividend) | `ibkr_ucits`, `ibkr_us` | Compare with GOLDBEES (12 months to long term, no LRS) |

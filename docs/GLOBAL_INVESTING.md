@@ -70,7 +70,7 @@ conditions apply. I could not verify this from a primary source, so treat it as 
 
 ## 3. What to buy: US-domiciled ETF vs Irish UCITS
 
-| | US-domiciled (SPY, QQQ, EWJ) | Irish UCITS Acc (CSPX, CNDX, SWDA, VWRA, EIMI) |
+| | US-domiciled (SPY, QQQ, EWJ) | Irish UCITS Acc (CSPX, CNDX, IWDA, VWRA, EIMI) |
 |---|---|---|
 | Listed | NYSE Arca / Nasdaq, USD | London Stock Exchange, USD line (pick the USD line to avoid FX) |
 | Dividends | Paid out. US withholds 25% (with W-8BEN). India taxes the dividend at slab; Form 67 credit is capped at the Indian tax, so total is about the slab rate | Reinvested inside the fund. The fund pays 15% treaty withholding on US dividends internally (already in the price). India taxes nothing until you sell |
