@@ -14,6 +14,7 @@ from datetime import date
 import numpy as np
 import pandas as pd
 
+from . import crash
 from .config import Lot, Settings
 from .costs import fx_cost, leg_cost
 from .engine import Trade, make_plan
@@ -36,6 +37,9 @@ VARIANTS = [
     ("Core-satellite without core overlay", "core_xs", "immediate", True),
     ("Static mix (55 Nifty/20 gold/10 S&P/15 cash)", "static_mix", "immediate", True),
     ("Half Nifty + half risk parity", "rp_blend", "immediate", True),
+    # crash guard variants (pe/crash.py): the guard is checked every day, the underlying policy on its usual schedule
+    ("Buy & hold + crash guard", "buy_hold+guard", "immediate", True),
+    ("Core + momentum + crash guard", "core_xs+guard", "immediate", True),
 ]
 
 
@@ -58,6 +62,7 @@ class Book:
     costs_paid: float = 0.0
     turnover: float = 0.0
     log: list = field(default_factory=list)
+    guard_mem: dict = field(default_factory=dict)   # crash guard: pre-exit weights of a buy & hold book
     journal: list = field(default_factory=list)    # one entry per day the planner ordered trades: what, and why
 
 
@@ -110,6 +115,9 @@ def run_variant(name, policy, execution, harvest, init_lots, px, vix, settings: 
     idx = px.index[px.index >= start]
     tm = settings.timing
     checks = _check_days(idx, tm["check_frequency"])
+    guarded = policy.endswith("+guard")
+    glevel = crash.level_series(px, vix, settings)["level"] if guarded else None     # causal, so reading day t equals running it on data up to t
+    acted_level = 0
     book = Book(copy.deepcopy(init_lots), 0.0, {b: 0.0 for b in BUCKETS}, fy_start_year(idx[0].date()))
     pending: list[Leg] = []
     navs = []
@@ -155,10 +163,14 @@ def run_variant(name, policy, execution, harvest, init_lots, px, vix, settings: 
             book.log.append((day, t.side.upper(), f"{t.symbol} {frac:.0%} of Rs {t.value:,.0f} @ {p:,.2f} [{t.kind}]"))
         pending = [l for l in pending if l.done_frac < 1 - 1e-9]
         # new decisions (only when nothing is still executing)
-        if ts in checks and not pending and i < len(idx) - 1:
+        # a change in the guard level triggers a check on any day: a crash does not wait for the monthly review
+        guard_trigger = guarded and int(glevel.loc[ts]) != acted_level
+        if (ts in checks or guard_trigger) and not pending and i < len(idx) - 1:
+            if guarded:
+                acted_level = int(glevel.loc[ts])
             hist = px.loc[:ts]
             plan = make_plan(ts, book.lots, book.cash, hist, vix.loc[:ts] if vix is not None else None, settings,
-                             book.fy_realised, policy, harvest, usd_inr=usd_inr)
+                             book.fy_realised, policy, harvest, usd_inr=usd_inr, guard_mem=book.guard_mem)
             for t in plan.trades:
                 immediate = execution == "immediate" or t.kind.startswith("harvest") or \
                     (t.kind == "risk_exit" and tm["regime_override_secretary"])

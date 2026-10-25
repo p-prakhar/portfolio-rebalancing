@@ -21,6 +21,8 @@ after), every factor considered, a replay of the last 12 months with a dot on ea
 price chart around it and an optional live TradingView chart), the 10-year evidence, and a tick-off checklist of the exact orders.
 It is one offline HTML file. Everything personal stays on your machine and is git-ignored.
 
+**Crash protection:** a guard runs on top of every strategy and cuts risk fast when warning signals stack up (`python main.py crash`; see `docs/CRASH_GUARD.md`).
+
 `python main.py validate` runs every strategy from a lump sum over 10 years and over rolling 3-year windows, and labels each
 "robust edge", "promising, not proven", "cuts drawdown at little cost" or "no reliable edge". Read `reports/validation.md`: most
 fancy strategies do not beat buy & hold after Indian tax once you look beyond one year, and the page says so.
