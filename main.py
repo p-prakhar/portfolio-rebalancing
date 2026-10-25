@@ -214,6 +214,15 @@ def cmd_site(args):
     data["daily_sim"] = _json.loads(dpath.read_text()) if dpath.exists() else None
     apath = ROOT / "reports" / "daily_sim_all.json"
     data["daily_sim_all"] = _json.loads(apath.read_text()) if apath.exists() else None
+    data["years"] = None
+    if data["daily_sim_all"] and not args.demo:
+        try:
+            from pe import insights, validate as _v
+            ls, lpx, _, lcl = _v.load_long(10)
+            lfx = lcl[ls["data"]["fx_ticker"]].reindex(lpx.index).ffill() if ls["data"]["fx_ticker"] in lcl else None
+            data["years"] = insights.build(data["daily_sim_all"], lpx, lfx)
+        except Exception as exc:
+            logging.warning("year-by-year view skipped: %s", exc)
     out = site.render(data, ROOT / settings["report"]["out_dir"] / ("example.html" if example else "index.html"))
     print(f"Decision: {data['verdict']['call']} - {data['verdict']['headline']}\nSaved {out}")
     return out

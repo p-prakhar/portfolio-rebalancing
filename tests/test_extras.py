@@ -143,3 +143,11 @@ def test_income_sets_slab():
     apply_tax_profile(s, Profile(gross_salary_inr=900_000))
     assert s.tax["slab_rate"] == 0.10
     assert apply_tax_profile(s, Profile()) is None
+
+
+def test_year_insights_rules():
+    from pe.insights import describe
+    assert "Gold boom" in describe({"nifty": 0.05, "gold": 0.30, "nifty_dd": -0.05})
+    assert describe({"nifty": 0.15, "nifty_dd": -0.36}).startswith("Crash")
+    assert "Rupee fell" in describe({"nifty": 0.08, "nifty_dd": -0.06, "usdinr": 0.09})
+    assert describe({}) == "Not enough data."

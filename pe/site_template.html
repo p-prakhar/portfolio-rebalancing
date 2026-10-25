@@ -455,6 +455,29 @@ function buildReplay(p){
     }
     draws.push(drawA);
   }
+  const YR=D.years;
+  if (YR){
+    const box=el('div',{class:'panel block'}); const after=[...p.children].find(c=>c.querySelector && c.querySelector('h2') && c.querySelector('h2').textContent.startsWith('Every strategy')); p.insertBefore(box, after?after.nextSibling:null);
+    const SHORT={'Just hold the Nifty ETFs':'Hold','Core-satellite without core overlay':'Core-sat.','Core-satellite with trend overlay':'Core-sat. + trend','Cross-sectional momentum, top 3':'Momentum','Dual momentum (Nifty/gold/cash)':'Dual mom.','Trend filter + volatility targeting':'Trend + vol','Risk parity':'Risk parity','Defensive asset allocation':'DAA','Keep holdings, exit on technicals':'Exit on TA','Static mix 55/20/10/15':'Static mix','Half Nifty + half risk parity':'Half RP'};
+    const cols=[YR.hold, ...YR.strategies.filter(x=>x!==YR.hold)];
+    box.append(el('h2',{},'Year by year: who won, and what was going on'), el('p',{class:'small muted'},`Calendar-year returns of each strategy in the ${YR.horizon}-year daily run, before tax still owed at year end. Green cells beat just holding that year, red ones lagged it; the darker, the bigger the gap. The summaries are written by simple rules from what gold, chips, mid caps, the rupee and the Nifty did. First and last years are partial.`));
+    const detail=el('div',{class:'event'}); detail.append(el('p',{class:'muted'},'Click a year for its ranking.'));
+    const tbl=el('table',{}); const head=el('tr',{}, el('th',{},'Year'), el('th',{style:'text-align:left;min-width:240px'},'What happened'), cols.map(c=>el('th',{title:c},SHORT[c]||c)));
+    const body=el('tbody');
+    YR.rows.slice().reverse().forEach(r=>{
+      const hold=r.returns[YR.hold];
+      const tr=el('tr',{tabindex:'0',style:'cursor:pointer'}, el('td',{}, el('b',{},String(r.year)), r.partial?el('div',{class:'small muted'},'partial'):null), el('td',{style:'white-space:normal;text-align:left;min-width:240px;max-width:360px',class:'small'}, r.insight),
+        cols.map(c=>{ const v=r.returns[c]; if (v==null) return el('td',{class:'muted'},'-'); const gap=c===YR.hold?0:v-hold; const a=Math.min(1,Math.abs(gap)/0.2);
+          const bg=c===YR.hold?'transparent':`color-mix(in srgb, ${gap>=0?'var(--buy)':'var(--sell)'} ${Math.round(8+a*42)}%, transparent)`;
+          const td=el('td',{style:`background:${bg};${c===r.winner?'font-weight:700;':''}`}, spc(v,0)); td.addEventListener('pointermove',e=>showTip(e,`<b>${r.year}: ${c}</b><br>${spc(v)}${c===YR.hold?'':`, ${gap>=0?'+':''}${(gap*100).toFixed(1)} points vs holding`}`)); td.addEventListener('pointerleave',hideTip); return td; }));
+      const pick=()=>{ detail.innerHTML=''; const ranked=cols.filter(c=>r.returns[c]!=null).sort((a,b)=>r.returns[b]-r.returns[a]); const vals=ranked.map(c=>r.returns[c]); const lo=Math.min(0,...vals), hi=Math.max(0,...vals), span=(hi-lo)||0.01; const zx=(0-lo)/span*100;
+        detail.append(el('h3',{},`${r.year}${r.partial?' (partial year)':''}: ${r.beat_hold} of ${r.n} strategies beat holding`), el('p',{class:'muted'}, r.insight),
+          el('div',{class:'scale',style:'margin-top:8px'}, ranked.map(c=>el('div',{class:'row'}, el('div',{class:'small',style:c===YR.hold?'font-weight:600':''},c), el('div',{style:`position:relative;height:16px;background:linear-gradient(var(--faint),var(--faint)) ${zx}% 0/1px 100% no-repeat`}, el('div',{style:`position:absolute;top:0;height:16px;border-radius:3px;left:${(Math.min(r.returns[c],0)-lo)/span*100}%;width:${Math.max(0.8,Math.abs(r.returns[c])/span*100)}%;background:${c===YR.hold?css('--faint'):r.returns[c]>=hold?css('--buy'):css('--sell')}`})), el('div',{class:'val'},spc(r.returns[c]))))));
+        detail.scrollIntoView({block:'nearest'}); };
+      tr.addEventListener('click',pick); tr.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); pick(); } }); body.append(tr); });
+    tbl.append(el('thead',{},head), body);
+    box.append(el('div',{class:'scroll'}, tbl), legend([{name:'Beat holding that year',color:css('--buy')},{name:'Lagged holding',color:css('--sell')}]), detail);
+  }
   if (!B && !V && !S && !SA) p.append(el('p',{class:'muted'},'Run python main.py site to add the replay, and python main.py validate for the 10-year test.'));
   redraw.record = () => draws.forEach(f=>f());
 }
