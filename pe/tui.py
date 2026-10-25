@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import glob
 import os
+import shlex
 import sys
 import tempfile
 from argparse import Namespace
@@ -151,8 +152,17 @@ def _date(prompt: str) -> date:
 
 def _paths(prompt: str) -> list[str]:
     a = _ask(prompt, PathCompleter(expanduser=True) if HAVE_PT else None)
+    # Try the entire input as a single path/glob first (handles unquoted spaces)
+    whole = glob.glob(os.path.expanduser(a.strip())) or []
+    if whole:
+        return [p for p in sorted(whole) if os.path.isfile(p)]
+    # Fall back to shell-style splitting (respects quotes around spaced paths)
     out = []
-    for p in a.split():
+    try:
+        parts = shlex.split(a)
+    except ValueError:
+        parts = a.split()
+    for p in parts:
         out += sorted(glob.glob(os.path.expanduser(p))) or [os.path.expanduser(p)]
     return [p for p in out if os.path.isfile(p)]
 
