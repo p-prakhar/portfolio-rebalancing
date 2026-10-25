@@ -47,11 +47,66 @@ class Profile:
     employer_ticker: str = ""
     employer_broker: str = ""          # e.g. etrade
     has_rsu: bool = False
+    # income, for the tax-aware plan (all yearly, in rupees; leave 0 if unknown)
+    tax_regime: str = "new"            # new | old
+    gross_salary_inr: float = 0.0      # Form 16 Part B: gross salary, excluding RSU perquisite
+    rsu_perquisite_inr: float = 0.0    # RSU/ESPP value taxed as salary this year (payslip / Form 16 "perquisites 17(2)")
+    other_income_inr: float = 0.0      # FD/savings interest, dividends, rent (AIS on the income tax portal)
+    deductions_inr: float = 0.0        # old regime only: 80C, 80D, HRA, home-loan interest...
+    carried_st_loss_inr: float = 0.0   # last ITR, Schedule CFL: short-term capital loss carried forward
+    carried_lt_loss_inr: float = 0.0   # last ITR, Schedule CFL: long-term capital loss carried forward
 
     def equity_cap(self) -> float:
         """Rule of thumb: (110 - age) % in equity, tilted by risk appetite, bounded to 20-90%."""
         base = 110 - self.age + RISK_TILT.get(self.risk, 0)
         return max(20, min(90, base)) / 100
+
+
+# Slabs per the Finance Act 2025 (FY 2025-26 onward). Verify each Budget.
+SLABS = {"new": [(400000, 0.0), (800000, 0.05), (1200000, 0.10), (1600000, 0.15), (2000000, 0.20), (2400000, 0.25), (float("inf"), 0.30)],
+         "old": [(250000, 0.0), (500000, 0.05), (1000000, 0.20), (float("inf"), 0.30)]}
+STD_DEDUCTION = {"new": 75000, "old": 50000}
+REBATE_LIMIT = {"new": 1200000, "old": 500000}
+INCOME_WHERE = """Where to find your income figures
+  Gross salary          Form 16 Part B (from your employer each June), or 12 x the monthly gross on your payslip.
+  RSU/ESPP perquisite   Payslip lines like "RSU perquisite" or "Stock perq"; Form 16 Part B, perquisites under 17(2).
+                        E*TRADE Benefit History shows each vest's value in dollars too.
+  Other income          incometax.gov.in > AIS (Annual Information Statement): bank interest, dividends, with TDS already cut.
+                        Form 26AS on the same portal shows the TDS credits.
+  Regime                Form 16 says whether your employer used the new or old regime; new is the default.
+  Deductions (old only) Form 16 Part B, Chapter VI-A (80C, 80D...), HRA and home-loan interest.
+  Carried-forward loss  Your last ITR, Schedule CFL, columns for short-term and long-term capital loss."""
+
+
+def taxable_income(p: Profile) -> float:
+    gross = p.gross_salary_inr + p.rsu_perquisite_inr
+    std = STD_DEDUCTION.get(p.tax_regime, 75000) if gross > 0 else 0
+    ded = p.deductions_inr if p.tax_regime == "old" else 0
+    return max(0.0, gross - std - ded + p.other_income_inr)
+
+
+def marginal_slab(p: Profile) -> tuple[float, float, str]:
+    """(slab rate on the next rupee of ordinary income, surcharge, explanation)."""
+    ti = taxable_income(p)
+    slabs = SLABS.get(p.tax_regime, SLABS["new"])
+    rate = next(r for limit, r in slabs if ti < limit)
+    sur = 0.25 if ti > 2e7 else 0.15 if ti > 1e7 else 0.10 if ti > 5e6 else 0.0
+    note = f"Taxable income about Rs {ti:,.0f} under the {p.tax_regime} regime puts your next rupee of interest or slab-taxed gains at {rate:.0%}"
+    if sur:
+        note += f" plus a {sur:.0%} surcharge"
+    if ti <= REBATE_LIMIT.get(p.tax_regime, 0):
+        note += f". Your income is under the Rs {REBATE_LIMIT[p.tax_regime]:,.0f} rebate limit, so ordinary income may be tax free, but the rebate does not cover capital gains taxed at special rates"
+    return rate, sur, note + "."
+
+
+def apply_tax_profile(settings, p: Profile | None) -> str | None:
+    """Set the slab rate and surcharge from the profile's income. Returns the explanation, or None if no income is given."""
+    if p is None or (p.gross_salary_inr + p.rsu_perquisite_inr + p.other_income_inr) <= 0:
+        return None
+    rate, sur, note = marginal_slab(p)
+    settings.raw["tax"]["slab_rate"] = rate
+    settings.raw["tax"]["surcharge"] = min(sur, 0.15)   # capital gains under 111A/112A are capped at 15%
+    return note
 
 
 @dataclass

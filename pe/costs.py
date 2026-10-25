@@ -17,6 +17,8 @@ def cost_breakdown(settings: Settings, asset: Asset, side: str, value: float, pr
         return {"commission": min(comm_usd * fx, value * c["max_commission_pct"]),
                 "SEC fee": value * c["sec_fee_sell"] if side == "sell" else 0.0,
                 "spread": value * c["half_spread"]}
+    if asset.venue == "mutual_fund":
+        return {"stamp duty": value * c["stamp_buy"] if side == "buy" else 0.0, "exit load": value * c.get("exit_load", 0.0) if side == "sell" else 0.0}
     if asset.venue == "cash_fund":
         return {"spread/exit load": value * (c.get("half_spread", 0) + (c.get("exit_load", 0) if side == "sell" else 0))}
     exch = value * c["exch"]

@@ -28,10 +28,16 @@ except Exception:   # not installed or not a terminal: plain input() still works
 COMMANDS = {
     "status": "your portfolio, other investments and limits at a glance",
     "profile": "set age, risk appetite, employer stock",
+    "income": "salary, RSU income, regime and carried-forward losses for exact tax",
     "import-kite": "load your Zerodha Kite tradebook(s) as tax lots",
     "import-etrade": "load RSU/ESPP vests from an E*TRADE export",
     "add-lot": "type in one purchase by hand",
-    "add-other": "add FD, PPF, EPF, NPS, mutual funds, gold, property...",
+    "add-fd": "add a fixed deposit (SBI, IDFC FIRST or any bank)",
+    "fds": "your FDs: value today, after-tax yield, cost of breaking early",
+    "import-mf": "load all your mutual funds from a CAS statement PDF",
+    "add-mf": "add one mutual fund purchase by hand",
+    "mf": "your mutual funds: regular or direct, and whether switching pays",
+    "add-other": "add PPF, EPF, NPS, gold, property and anything else",
     "check": "today's plan as text",
     "site": "build and open the visual decision page",
     "backtest": "12-month replay of every strategy",
@@ -65,8 +71,9 @@ ETRADE_GUIDE = """How to export RSUs from E*TRADE (Morgan Stanley at Work)
 WHERE = """Where to find each number
   Equity/ETFs on Zerodha       console.zerodha.com > Reports > Tradebook (CSV)       -> import-kite
   Employer RSUs (E*TRADE)      At Work > My Account > Benefit History > Download     -> import-etrade
-  Mutual funds (any AMC)       mfcentral.com > Consolidated Account Statement (free, emailed) or Coin > Holdings -> add-other
-  Fixed deposits, savings      your bank app > Deposits / Accounts                   -> add-other
+  Mutual funds (any AMC)       CAS PDF from camsonline.com or mfcentral.com (see import-mf) -> import-mf
+  Fixed deposits               SBI: YONO > Deposits; IDFC FIRST: app > Deposits; or the FD advice -> add-fd
+  Savings balances             your bank app > Accounts                              -> add-other
   EPF                          passbook.epfindia.gov.in or the UMANG app > EPF passbook -> add-other
   PPF                          bank or post office passbook / net banking             -> add-other
   NPS                          enps.nsdl.co.in or your CRA login > Transaction statement -> add-other
@@ -222,6 +229,121 @@ def do_add_other() -> None:
     print(f"Saved. Counted as {cls}{' (liquid)' if liquid else ''}.")
 
 
+def do_income() -> None:
+    from .profile import INCOME_WHERE, marginal_slab
+    print(INCOME_WHERE)
+    p = load_profile() or Profile()
+    p.tax_regime = _choice("Tax regime", ["new", "old"], p.tax_regime)
+    p.gross_salary_inr = _number("Gross salary this financial year, Rs (without RSUs)", p.gross_salary_inr)
+    p.rsu_perquisite_inr = _number("RSU/ESPP income taxed as salary this year, Rs", p.rsu_perquisite_inr)
+    p.other_income_inr = _number("Other income: interest, dividends, rent, Rs", p.other_income_inr)
+    if p.tax_regime == "old":
+        p.deductions_inr = _number("Deductions (80C, 80D, HRA, home loan), Rs", p.deductions_inr)
+    p.carried_st_loss_inr = _number("Short-term capital loss carried forward, Rs (ITR Schedule CFL; 0 if none)", p.carried_st_loss_inr)
+    p.carried_lt_loss_inr = _number("Long-term capital loss carried forward, Rs", p.carried_lt_loss_inr)
+    save_profile(p)
+    print("Saved. " + marginal_slab(p)[2])
+
+
+def do_add_fd() -> None:
+    from . import fd as F
+    bank = _choice("Bank", list(F.BANKS), "sbi")
+    print(f"  Where to find the details: {F.BANKS[bank]['where']}")
+    principal = _number("Amount deposited (Rs)", None, 1)
+    rate = _number("Interest rate in % a year (as on the FD advice)", None, 0.1, 20) / 100
+    start = _date("Start date")
+    months = int(_number("Tenure in months (e.g. 12, 24, 60)", 12, 1, 240))
+    payout = _choice("Interest paid", ["cumulative", "quarterly", "monthly"], "cumulative")
+    senior = _choice("Senior citizen deposit?", ["no", "yes"], "no") == "yes"
+    label = _ask("Short name", default=f"{F.BANKS[bank]['name']} {months}m")
+    items = [x for x in F.load() if x.label != label] + [F.FD(bank, principal, rate, start, months, payout, label, None, senior)]
+    F.save(items)
+    print(f"Saved. Matures on {items[-1].maturity}. {F.BANKS[bank]['penalty_note']}")
+
+
+def do_fds() -> None:
+    from . import fd as F
+    rows = F.summary(F.load(), load_settings().tax["slab_rate"])
+    if not rows:
+        print("No FDs yet. Run add-fd.")
+        return
+    for r in rows:
+        print(f"  {r['label']:<22} Rs {r['value_today']:>11,.0f} today, {r['rate']:.2%} booked ({r['after_tax_yield']:.2%} after tax), matures {r['maturity']} "
+              f"({r['days_left']} days). Breaking today: Rs {r['break_value_today']:,.0f}." + (" TDS likely this year." if r["tds_likely"] else ""))
+
+
+def do_import_mf() -> None:
+    from . import mf as M
+    print(M.WHERE)
+    files = _paths("CAS PDF path")
+    if not files:
+        print("No readable file found.")
+        return
+    import getpass
+    pw = getpass.getpass("CAS password (the one you set when requesting it; not shown, not saved): ")
+    try:
+        cas = M.read_cas(files[0], pw)
+    except Exception as exc:
+        print(f"  Could not read the PDF ({type(exc).__name__}: {exc}). Check the password, or use add-mf.")
+        return
+    lots, meta, warns = M.lots_from_cas(cas)
+    for w in warns:
+        print("  note:", w)
+    if not lots:
+        print("No open mutual fund holdings found in the statement.")
+        return
+    merge_lots(lots, meta, replace_symbols=set(meta))
+    print(f"Imported {len(lots)} lot(s) in {len(meta)} fund(s). Run `mf` to see regular vs direct costs.")
+
+
+def do_add_mf() -> None:
+    from . import mf as M
+    q = _ask("Fund name to search (e.g. 'axis bluechip')")
+    if not q:
+        return
+    try:
+        hits = M.search(q)[:12]
+    except Exception as exc:
+        print(f"  Search failed ({exc}).")
+        return
+    if not hits:
+        print("  No match. Try fewer words.")
+        return
+    for i, h in enumerate(hits, 1):
+        print(f"  {i:>2}. {h['schemeName']}")
+    k = int(_number("Pick the exact plan you hold (number)", 1, 1, len(hits))) - 1
+    h = hits[k]
+    d = _date("Purchase date")
+    nav = M.nav_series(h["schemeCode"])
+    px = float(nav[:str(d)].iloc[-1]) if len(nav[:str(d)]) else float(nav.iloc[0])
+    amt = _number(f"Amount invested in Rs (NAV that day about {px:,.2f})", None, 1)
+    cat = M.scheme_meta(h["schemeCode"]).get("scheme_category", "")
+    sym = M.symbol_for(h["schemeCode"])
+    merge_lots([{"symbol": sym, "qty": round(amt / px, 4), "buy_date": str(d), "price": round(px, 4)}],
+               {sym: M.asset_meta(h["schemeCode"], h["schemeName"], cat, d)}, replace_symbols=set())
+    print(f"Added {amt / px:,.3f} units of {h['schemeName']}." + (" This is a REGULAR plan; run `mf` to see what it costs you." if M.is_regular(h["schemeName"]) else ""))
+
+
+def do_mf() -> None:
+    from . import mf as M
+    from .config import load_holdings
+    rows = M.holdings_report(load_holdings().lots, load_settings())
+    if not rows:
+        print("No mutual funds yet. Run import-mf or add-mf.")
+        return
+    for r in rows:
+        line = f"  {r['name'][:60]:<60} Rs {r['value']:>11,.0f}"
+        if r["regular"] and r.get("gap") is not None:
+            line += (f"\n    Regular plan: gave up {r['gap']:.2%} a year against the direct plan (about Rs {r['yearly_cost']:,.0f} a year at today's value)."
+                     f"\n    Switching now costs about Rs {r['switch_tax']:,.0f} tax" + (f" plus about Rs {r['exit_load_est']:,.0f} exit load" if r['exit_load_est'] else "")
+                     + (f"; pays back in {r['breakeven_years']:.1f} years." if r.get('breakeven_years') else "."))
+        elif r["regular"]:
+            line += "\n    Regular plan; no direct twin found to compare."
+        else:
+            line += "  (direct plan)"
+        print(line)
+
+
 def do_status() -> None:
     from .config import load_holdings
     h = load_holdings()
@@ -258,6 +380,8 @@ def dispatch(cmd: str) -> bool:
             print(f"  {c:<14} {d}")
     elif cmd == "profile":
         do_profile()
+    elif cmd == "income":
+        do_income()
     elif cmd == "import-kite":
         do_import_kite()
     elif cmd == "import-etrade":
@@ -266,6 +390,16 @@ def dispatch(cmd: str) -> bool:
         do_add_lot()
     elif cmd == "add-other":
         do_add_other()
+    elif cmd == "add-fd":
+        do_add_fd()
+    elif cmd == "fds":
+        do_fds()
+    elif cmd == "import-mf":
+        do_import_mf()
+    elif cmd == "add-mf":
+        do_add_mf()
+    elif cmd == "mf":
+        do_mf()
     elif cmd == "status":
         do_status()
     elif cmd == "where":
@@ -296,7 +430,7 @@ def dispatch(cmd: str) -> bool:
 def run_shell() -> None:
     print("Portfolio engine. Type a command (Tab completes, Up recalls); `help` lists them.\n")
     if not (ROOT / "config" / "holdings.yaml").exists():
-        print("First time? Suggested order: profile -> import-kite -> import-etrade (if you have RSUs) -> add-other -> site\n")
+        print("First time? Suggested order: profile -> income -> import-kite -> import-etrade (RSUs) -> import-mf -> add-fd -> add-other -> site\n")
     comp = FuzzyCompleter(WordCompleter(list(COMMANDS), meta_dict=COMMANDS, ignore_case=True)) if HAVE_PT else None
     (ROOT / "state").mkdir(exist_ok=True)
     sess = PromptSession(history=FileHistory(str(ROOT / "state" / "history")), completer=comp, complete_while_typing=True) if HAVE_PT else None

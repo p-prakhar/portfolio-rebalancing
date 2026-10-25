@@ -106,3 +106,40 @@ def test_silver_parse_and_compare_math():
     assert r["r5"] > rows["NIFTYBEES"]["r5"] > rows["GOLDBEES"]["r5"]
     assert r["after_tax_5y"] < r["r5"]          # costs and tax always take something
     assert "Semiconductors" in uc.report(list(rows.values()))
+
+
+def test_fd_values_and_penalty():
+    from pe import fd
+    f = fd.FD("sbi", 100000, 0.07, date(2025, 4, 1), 12)
+    assert abs(f.value_on(f.maturity) - 100000 * (1 + 0.07 / 4) ** 4) < 50
+    assert f.break_value(date(2025, 10, 1)) < f.value_on(date(2025, 10, 1))
+    assert fd.FD("sbi", 900000, 0.07, date(2025, 4, 1), 12).penalty_rate() == 0.01
+    s = fd.summary([f], 0.30, today=date(2025, 10, 1))[0]
+    assert s["after_tax_yield"] < s["effective_yield"] and s["tds_likely"] is False
+
+
+def test_mf_lots_from_cas_fifo_and_tax_class(monkeypatch):
+    from pe import mf
+    monkeypatch.setattr(mf, "scheme_meta", lambda code: {"scheme_category": "Equity Scheme - Flexi Cap Fund"})
+    cas = {"folios": [{"schemes": [{"scheme": "X Flexi Cap Fund - Regular Plan - Growth", "amfi": "123", "close": 15,
+            "transactions": [{"date": date(2022, 1, 5), "units": 10, "nav": 50, "amount": 500},
+                             {"date": date(2023, 1, 5), "units": 10, "nav": 60, "amount": 600},
+                             {"date": date(2024, 1, 5), "units": -5, "nav": 70, "amount": -350}]}]}]}
+    lots, meta, warns = mf.lots_from_cas(cas)
+    assert [(l["qty"], l["buy_date"]) for l in lots] == [(5, "2022-01-05"), (10, "2023-01-05")]
+    assert meta["MF123"]["tax_class"] == "in_equity" and not warns
+    assert mf.tax_class("Debt Scheme - Corporate Bond Fund", date(2024, 1, 1)) == "in_debt"
+    assert mf.tax_class("Other Scheme - FoF Overseas", date(2025, 6, 1)) == "mf_other"
+    assert mf.is_regular("X Fund - Regular Plan - Growth") and not mf.is_regular("X Fund - Direct Plan - Growth")
+
+
+def test_income_sets_slab():
+    from pe.config import load_settings
+    from pe.profile import Profile, apply_tax_profile, marginal_slab
+    p = Profile(gross_salary_inr=3_000_000, tax_regime="new")
+    assert marginal_slab(p)[0] == 0.30
+    assert marginal_slab(Profile(gross_salary_inr=1_500_000))[0] == 0.15
+    s = load_settings()
+    apply_tax_profile(s, Profile(gross_salary_inr=900_000))
+    assert s.tax["slab_rate"] == 0.10
+    assert apply_tax_profile(s, Profile()) is None

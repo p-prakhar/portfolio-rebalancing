@@ -198,6 +198,7 @@ const TABS = [
   {id:'steps', name:'Steps', build:buildSteps},
   {id:'record', name:'Track record', build:buildReplay},
   {id:'markets', name:'Explore markets', build:buildExplore},
+  {id:'savings', name:'FDs and funds', build:buildSavings},
   {id:'method', name:'How it decides', build:buildMethod},
 ];
 const built = {};
@@ -241,6 +242,7 @@ function buildDecision(p){
     host, legend([{name:R.benchmark+' price',color:css('--s1')},{name:'200-day average',color:css('--faint'),dash:true}])));
   redraw.decision = () => lineChart(host,{dates:R.series.dates,series:[{name:R.benchmark,color:css('--s1'),vals:R.series.price,w:2},{name:'200-day average',color:css('--faint'),vals:R.series.sma,dash:'5 4',w:1.5}],fmt:x=>num(x,0),label:'Nifty 50 ETF against its 200-day average',height:260});
 
+  if (D.tax_note) p.append(el('div',{class:'block'}, el('h2',{},'Your tax bracket'), el('p',{class:'muted',style:'max-width:68ch'}, D.tax_note)));
   if (D.guardrails.length) p.append(el('div',{class:'block'}, el('h2',{},'Your limits'), el('div',{class:'two'}, D.guardrails.map(g=>el('div',{class:'panel block'}, el('span',{class:'chip '+(g.level==='warn'?'warn':'hold')}, g.level==='warn'?'Needs a look':g.level==='ok'?'Fine':'Tip'), el('h3',{},g.title), el('p',{class:'small muted'},g.detail))))));
   p.append(el('div',{class:'pick'}, el('button',{class:'btn primary',type:'button',onclick:()=>show('plan',true)},'See the plan'), el('button',{class:'btn',type:'button',onclick:()=>show('record',true)},'Check the track record')));
 }
@@ -507,6 +509,51 @@ function buildExplore(p){
   ub.append(el('details',{}, el('summary',{},'Show all numbers'), el('div',{class:'scroll'}, el('table',{}, el('thead',{}, el('tr',{}, ['Asset','Where','1y','3y','5y','10y','5y after tax','Volatility','Worst fall'].map(h=>el('th',{},h)))), el('tbody',{}, [...U].sort((a,b)=>(b.after_tax_5y==null?-9:b.after_tax_5y)-(a.after_tax_5y==null?-9:a.after_tax_5y)).map(r=>el('tr',{}, el('td',{}, el('b',{},r.symbol),' ',el('span',{class:'muted small'},r.theme)), el('td',{},r.where), ...['r1','r3','r5','r10','after_tax_5y'].map(k=>el('td',{class:r[k]>0?'buy':r[k]<0?'sell':''},spc(r[k]))), el('td',{},pc(r.vol,0)), el('td',{},pc(r.max_dd_5y,0)))))))),
     el('p',{class:'small muted'},'India has no pure chip ETF; the Indian routes are electronics makers or a global tech fund. Platinum, copper and rare earths are only available through US-listed funds.'));
   redraw.markets = () => { drawM(); drawU(); };
+}
+
+
+/* ---------- tab: FDs and mutual funds ---------- */
+function buildSavings(p){
+  p.append(el('div',{class:'block'}, el('h1',{},'Your fixed deposits and mutual funds'), el('p',{class:'lede'},'What they are worth today, what they really earn after tax, and what it costs to change them. The engine never trades these, but they count toward your limits.')));
+  const fds=D.fds||[], banks=D.fd_banks||{};
+  const fp=el('div',{class:'panel block'}); p.append(fp); fp.append(el('h2',{},'Fixed deposits'));
+  if (!fds.length){
+    fp.append(el('p',{class:'muted'},'No FDs added yet. In the shell, run add-fd. Here is where each bank shows the details you need (amount, rate, start date, tenure):'),
+      el('ul',{class:'reasons small'}, Object.values(banks).map(b=>el('li',{}, el('b',{},b.name+': '), b.where))));
+  } else {
+    const tot=fds.reduce((a,f)=>a+f.value_today,0), tax=fds.reduce((a,f)=>a+f.tax_this_fy,0);
+    const st=el('div',{class:'stats'}); [['Worth today',lakh(tot)],['Interest this year, taxed',rs(fds.reduce((a,f)=>a+f.interest_this_fy,0))],['Tax on it at your slab',rs(tax)],['Next maturity',fds.slice().sort((a,b)=>a.days_left-b.days_left)[0].maturity]].forEach(([a,b])=>st.append(el('div',{class:'stat'},el('small',{},a),el('b',{},b))));
+    fp.append(st);
+    const host=el('div'); fp.append(el('h3',{},'When they mature'), host);
+    const drawLadder=()=>{ host.innerHTML=''; const W=Math.max(host.clientWidth||600,300), rowH=34, lab=Math.min(170,W*.35), H=fds.length*rowH+28;
+      const t0=Math.min(...fds.map(f=>+new Date(f.start))), t1=Math.max(...fds.map(f=>+new Date(f.maturity))), now=Date.now(); const X=t=>lab+(W-lab-16)*(t-t0)/((t1-t0)||1);
+      const svg=sv('svg',{viewBox:`0 0 ${W} ${H}`,width:'100%',height:H,role:'img','aria-label':'FD timelines from start to maturity'});
+      svg.append(sv('line',{x1:X(now),x2:X(now),y1:0,y2:H-18,stroke:css('--accent'),'stroke-dasharray':'3 3'}), sv('text',{x:X(now),y:H-4,'text-anchor':'middle','font-size':12,fill:css('--accent')},'Today'));
+      fds.forEach((f,k)=>{ const y=k*rowH+4, a=X(+new Date(f.start)), b=X(+new Date(f.maturity)), n=Math.min(Math.max(X(now),a),b);
+        const g=sv('g',{tabindex:0,role:'img','aria-label':`${f.label}: matures ${f.maturity}`});
+        g.append(sv('text',{x:lab-10,y:y+16,'text-anchor':'end','font-size':13,fill:css('--ink')},f.label), sv('rect',{x:a,y:y+6,width:Math.max(2,b-a),height:14,rx:4,fill:css('--wash'),stroke:css('--line')}), sv('rect',{x:a,y:y+6,width:Math.max(0,n-a),height:14,rx:4,fill:css('--s1'),'fill-opacity':.7}));
+        const tipf=e=>showTip(e,`<b>${f.label}</b><br>${lakh(f.principal)} at ${pc(f.rate,2)}<br>${f.start} to ${f.maturity}<br>Worth ${rs(f.value_today)} today`); g.addEventListener('pointermove',tipf); g.addEventListener('pointerleave',hideTip); svg.append(g); });
+      host.append(svg); };
+    redraw.savings=()=>drawLadder();
+    fp.append(el('div',{}, fds.map(f=>el('div',{class:'trade'}, el('span',{class:'chip hold'},f.bank), el('b',{},f.label), el('span',{class:'amt'},lakh(f.value_today)),
+      el('span',{class:'sub'}, `Booked at ${pc(f.rate,2)}, which is ${pc(f.effective_yield,2)} a year with compounding and ${pc(f.after_tax_yield,2)} after tax at your slab. Matures ${f.maturity} (${f.days_left} days). Breaking it today would pay about ${rs(f.break_value_today)}, ${rs(f.value_today-f.break_value_today)} less than holding to today's value. ${f.penalty_note}${f.tds_likely?` Interest from ${f.bank} this year is about ${rs(f.bank_interest_this_fy)}, over the TDS threshold, so expect 10% TDS (credited when you file).`:''}`)))));
+  }
+  fp.append(el('p',{class:'small muted'},'FD interest is taxed every year at your slab rate as it builds up, even when it is paid only at maturity. So in the 30% bracket an FD at 7% keeps a little under 5% a year, often less than an arbitrage fund, which is taxed like equity.'));
+
+  const mp=el('div',{class:'panel block'}); p.append(mp); mp.append(el('h2',{},'Mutual funds'));
+  const mfs=D.mfs||[];
+  if (!mfs.length){
+    mp.append(el('p',{class:'muted'},'No mutual funds added yet. The easiest way is a Consolidated Account Statement (CAS):'),
+      el('ol',{class:'reasons small',style:'list-style:decimal;padding-left:20px'}, (D.mf_where||'').split('\n').filter(l=>l.trim().startsWith('- ')).map(l=>el('li',{style:'padding-left:4px'},l.trim().slice(2)))),
+      el('p',{class:'small'},'Then run import-mf in the shell and give it the PDF and its password. For a fund you know by name, add-mf takes it by hand.'));
+  } else {
+    const tot=mfs.reduce((a,m)=>a+m.value,0), reg=mfs.filter(m=>m.regular), yc=reg.reduce((a,m)=>a+(m.yearly_cost||0),0);
+    const st=el('div',{class:'stats'}); [['Worth today',lakh(tot)],['Funds',String(mfs.length)],['On regular plans',`${reg.length} of ${mfs.length}`],['Regular plans cost you',`${rs(yc)} a year`]].forEach(([a,b])=>st.append(el('div',{class:'stat'},el('small',{},a),el('b',{},b))));
+    mp.append(st);
+    mp.append(el('div',{}, mfs.map(m=>el('div',{class:'trade'}, el('span',{class:'chip '+(m.regular?'warn':'buy')}, m.regular?'Regular plan':'Direct plan'), el('b',{},m.name), el('span',{class:'amt'},lakh(m.value)),
+      el('span',{class:'sub'}, `${m.category}. Gain so far ${rs(m.gain)}. ` + (m.regular ? (m.gap!=null ? `The direct plan of the same fund returned ${pc(m.gap,2)} a year more over 3 years, about ${rs(m.yearly_cost)} a year at today's value. Switching means selling: about ${rs(m.switch_tax)} tax${m.exit_load_est?` and ${rs(m.exit_load_est)} exit load on units under a year old`:''}, so it pays back in ${m.breakeven_years!=null?m.breakeven_years.toFixed(1)+' years':'n/a'}. A good moment is right after units turn long term, and up to Rs 1.25 lakh of equity gains a year is tax free.` : 'No direct plan found to compare.') : 'Already the low-cost plan.'))))));
+  }
+  mp.append(el('p',{class:'small muted'},'Regular plans pay the advisor a commission every year from inside the fund; direct plans of the same fund skip it. The gap above is measured from the two plans\' actual NAVs, so it includes every fee. Equity funds are taxed like shares (12.5% on long-term gains above Rs 1.25 lakh a year, 20% short term). Debt funds bought after April 2023 are taxed at your slab whatever the holding period.'));
 }
 
 /* ---------- tab: method ---------- */

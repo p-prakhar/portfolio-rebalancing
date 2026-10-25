@@ -24,6 +24,7 @@ tax:
     in_other: 12                 # listed gold / silver / international ETFs (from FY25-26)
     foreign: 24                  # US shares/ETFs held via IBKR etc.
     in_debt: null                # specified MF / liquid ETF: always slab, no LT
+    mf_other: 24                 # unlisted non-equity mutual funds (gold/international FoFs, hybrids under 65% equity) bought after 1 Apr 2025
   discount_rate: 0.07            # used to value tax deferral
   default_deferral_years: 5      # if you don't sell now, roughly when would you?
   lrs_tcs_threshold: 1000000     # LRS remittances above this per FY attract TCS
@@ -35,6 +36,7 @@ costs:
   nse_stock:    {brokerage: 0.0, stt_buy: 0.001, stt_sell: 0.001,   exch: 0.0000297, sebi: 0.000001, stamp_buy: 0.00015, gst: 0.18, dp_per_sell: 15.93, half_spread: 0.0003}
   ibkr_us:      {commission_per_share_usd: 0.005, min_commission_usd: 1.0, max_commission_pct: 0.01, sec_fee_sell: 0.0000278, half_spread: 0.0002, fx_one_way: 0.0035}
   cash_fund:    {half_spread: 0.0, exit_load: 0.0}
+  mutual_fund:  {stamp_buy: 0.00005, exit_load: 0.0}   # buy/sell at NAV; exit loads (often 1% within a year) are flagged in the MF report
 
 # Universe the algorithms choose from. tax_class: in_equity | in_other | in_debt | foreign
 # venue picks the cost model. rotate: false = evaluated if held, never bought by the rotation.

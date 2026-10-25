@@ -44,10 +44,19 @@ def load_data(settings, demo: bool, refresh: bool = False):
     return px, vix, fx, note
 
 
-def _fy_realised(h):
+def _fy_realised(h, profile=None):
     r = h.realised_this_fy
-    return {"eq_st": r.get("equity_stcg", 0), "eq_lt": r.get("equity_ltcg", 0),
-            "oth_st": r.get("other_stcg", 0), "oth_lt": r.get("other_ltcg", 0), "debt": 0.0}
+    cf_st = profile.carried_st_loss_inr if profile else 0.0
+    cf_lt = profile.carried_lt_loss_inr if profile else 0.0
+    return {"eq_st": r.get("equity_stcg", 0) - cf_st, "eq_lt": r.get("equity_ltcg", 0),
+            "oth_st": r.get("other_stcg", 0), "oth_lt": r.get("other_ltcg", 0) - cf_lt, "debt": 0.0}
+
+
+def _tax_setup(settings, use_profile=True):
+    """Apply income-based slab and surcharge from the profile; returns (profile, note)."""
+    from pe.profile import apply_tax_profile, load_profile
+    prof = load_profile() if use_profile else None
+    return prof, apply_tax_profile(settings, prof)
 
 
 def timing_step(plan, px, settings) -> list[str]:
@@ -88,6 +97,7 @@ def cmd_run(args):
     settings = load_settings()
     if args.policy:
         settings.strategy["policy"] = args.policy
+    prof, tax_note = _tax_setup(settings)
     h = load_holdings(args.holdings)
     added = register_assets(settings, h)
     px, vix, fx, note = load_data(settings, args.demo, args.refresh)
@@ -97,7 +107,7 @@ def cmd_run(args):
         note += f"; auto-added from your holdings: {', '.join(sorted(added))}"
     h = resolve_amount_lots(h, px)
     usd = float(fx.iloc[-1]) if fx is not None else None
-    plan = make_plan(px.index[-1], h.lots, h.cash_inr, px, vix, settings, _fy_realised(h),
+    plan = make_plan(px.index[-1], h.lots, h.cash_inr, px, vix, settings, _fy_realised(h, prof),
                      lrs_used=h.lrs_remitted_this_fy_inr, usd_inr=usd)
     timing = timing_step(plan, px, settings) if not args.demo else []
     text = live_report(plan, settings, timing, args.demo, note)
@@ -156,12 +166,13 @@ def cmd_site(args):
     if args.policy:
         settings.strategy["policy"] = args.policy
     example = getattr(args, "example", False)
+    prof, tax_note = _tax_setup(settings, not example)
     h = load_holdings(ROOT / "config" / "holdings.example.yaml" if example else args.holdings)
     register_assets(settings, h)
     px, vix, fx, note = load_data(settings, args.demo, args.refresh)
     h = resolve_amount_lots(h, px)
     usd = float(fx.iloc[-1]) if fx is not None else None
-    plan = make_plan(px.index[-1], h.lots, h.cash_inr, px, vix, settings, _fy_realised(h), lrs_used=h.lrs_remitted_this_fy_inr, usd_inr=usd)
+    plan = make_plan(px.index[-1], h.lots, h.cash_inr, px, vix, settings, _fy_realised(h, prof), lrs_used=h.lrs_remitted_this_fy_inr, usd_inr=usd)
     timing = timing_step(plan, px, settings) if not (args.demo or example) else []
     start = px.index[-1] - timedelta(days=args.days)
     curves, table, logs = run_all(h.lots, px, vix, settings, start, fx)
@@ -173,10 +184,31 @@ def cmd_site(args):
             from pe import universe_compare as uc, validate as _v
             ls, lpx, _, _ = _v.load_long(10)
             universe = uc.compare(lpx, ls, usd)
+            try:
+                from pe import mf as _mf
+                universe += _mf.compare_rows(lpx.get("NIFTYBEES"), ls)
+            except Exception as exc:
+                logging.warning("mutual fund universe skipped: %s", exc)
         except Exception as exc:    # the page still works without the wider-universe table
             logging.warning("wider universe skipped: %s", exc)
+    from pe import fd as _fd
+    fds = [] if example else _fd.load()
+    others = [] if example else load_other()
+    from pe.profile import OtherAsset
+    others = others + [OtherAsset("fixed_deposit", f.label or f"{f.bank} FD", f.value_on(date.today())) for f in fds]
     data = site.build(plan, settings, timing, px, (curves, table, logs, start), None if example else load_profile(),
-                      [] if example else load_other(), validation, note, usd, universe)
+                      others, validation, note, usd, universe)
+    data["tax_note"] = tax_note or ("No income entered, so slab-taxed income is assumed to be at "
+                                    f"{settings.tax['slab_rate']:.0%}. Run `income` in the shell to make the tax plan exact.")
+    data["fds"] = _fd.summary(fds, settings.tax["slab_rate"], settings.tax["cess"])
+    data["fd_banks"] = {k: {"name": v["name"], "where": v["where"], "penalty_note": v["penalty_note"]} for k, v in _fd.BANKS.items()}
+    try:
+        from pe import mf as _mf
+        data["mfs"] = [] if example else _mf.holdings_report(h.lots, settings)
+        data["mf_where"] = _mf.WHERE
+    except Exception as exc:
+        logging.warning("mutual fund report skipped: %s", exc)
+        data["mfs"], data["mf_where"] = [], ""
     data["example"] = example
     dpath = ROOT / "reports" / "daily_sim.json"
     data["daily_sim"] = _json.loads(dpath.read_text()) if dpath.exists() else None
@@ -193,6 +225,11 @@ def cmd_compare(args):
     s, px, vix, closes = validate.load_long(10)
     fx = closes[s["data"]["fx_ticker"]].dropna().iloc[-1] if s["data"]["fx_ticker"] in closes else None
     rows = uc.compare(px, s, float(fx) if fx is not None else None)
+    try:
+        from pe import mf as _mf
+        rows += _mf.compare_rows(px.get("NIFTYBEES"), s)
+    except Exception as exc:
+        logging.warning("mutual fund universe skipped: %s", exc)
     text = uc.report(rows)
     p = save(text, s, "universe.md")
     show_md(text)

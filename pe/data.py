@@ -44,7 +44,7 @@ def _download(tickers: list[str], start: str) -> pd.DataFrame:
 def fetch_closes(settings: Settings, refresh: bool = False) -> pd.DataFrame:
     """Return raw closes keyed by ticker (native currency)."""
     cfg = settings["data"]
-    tickers = [a.ticker for a in settings.assets.values() if a.ticker]
+    tickers = [a.ticker for a in settings.assets.values() if a.ticker and not a.ticker.startswith("MFAPI:")]
     tickers += [cfg["fx_ticker"], cfg["vix_ticker"]]
     max_age = cfg.get("cache_max_age_hours", 12) * 3600
 
@@ -71,6 +71,15 @@ def fetch_closes(settings: Settings, refresh: bool = False) -> pd.DataFrame:
                 out[t] = _read_csv(p)
             else:
                 log.warning("No data for %s", t)
+    # mutual funds: daily NAVs from mfapi.in (AMFI data)
+    mf = [a.ticker for a in settings.assets.values() if a.ticker and a.ticker.startswith("MFAPI:")]
+    if mf:
+        from .mf import nav_series
+        for t in mf:
+            try:
+                out[t] = nav_series(t.split(":", 1)[1], refresh=refresh)
+            except Exception as exc:
+                log.warning("No NAV history for %s (%s)", t, exc)
     # manual overrides (e.g. broker exports) win
     mdir = ROOT / cfg["manual_dir"]
     for a in settings.assets.values():

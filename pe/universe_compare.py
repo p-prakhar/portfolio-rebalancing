@@ -105,7 +105,7 @@ def report(rows: list[dict]) -> str:
     out = ["# Wider universe: metals, semiconductors, India and abroad", "",
            "_Rupee returns (US assets include dollar moves), annualised. 'After tax 5y' is Rs 1 lakh held 5 years then sold, after round-trip costs, "
            "currency conversion and long-term capital-gains tax at today's rates. Past returns do not predict future ones._", ""]
-    for theme in dict.fromkeys(v[0] for v in INFO.values()):
+    for theme in list(dict.fromkeys(v[0] for v in INFO.values())) + sorted({r["theme"] for r in rows if r["theme"].startswith("Mutual funds")}):
         grp = [r for r in rows if r["theme"] == theme]
         if not grp:
             continue

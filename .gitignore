@@ -13,3 +13,4 @@ config/profile.yaml
 config/other_assets.yaml
 state/history
 data/cache*/
+config/fds.yaml

@@ -12,8 +12,8 @@ python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
 python main.py            # guided shell with autocomplete (Tab) and Up-arrow history
 ```
 
-Inside the shell, in this order: `profile` (age, risk appetite, employer stock) → `import-kite` (Zerodha tradebook CSVs) →
-`import-etrade` (RSU vests from E*TRADE Benefit History) → `add-other` (FD, PPF, EPF, NPS, mutual funds, gold, property; each
+Inside the shell, in this order: `profile` (age, risk appetite, employer stock) → `income` (salary, RSU income, regime, carried-forward losses; sets your real slab rate) → `import-kite` (Zerodha tradebook CSVs) →
+`import-etrade` (RSU vests from E*TRADE Benefit History) → `import-mf` (all mutual funds from a CAMS/KFintech/MF Central CAS PDF) → `add-fd` (SBI, IDFC FIRST or any bank) → `add-other` (FD, PPF, EPF, NPS, mutual funds, gold, property; each
 question says where to find the number, or type `where`) → `site`, which builds and opens `reports/index.html`.
 
 The page answers one question first: **is rebalancing worth it, yes or no, and why.** Below it: where the money moves (before and
