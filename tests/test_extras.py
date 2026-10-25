@@ -165,3 +165,40 @@ def test_sell_only_never_bought_or_harvested():
         plan = make_plan(px.index[-1], lots, 0, px, vix, s, {}, pol)
         assert not [t for t in plan.trades if t.symbol == "ACME" and t.side == "buy"], pol
         assert not [t for t in plan.trades if t.symbol == "ACME" and t.kind.startswith("harvest")], pol
+
+
+def _synthetic_navs(kind: str, years=8, seed=3):
+    rng = np.random.default_rng(seed)
+    idx = pd.bdate_range("2016-01-01", periods=252 * years)
+    n = 5
+    mu = np.full((len(idx), n), 0.10 / 252)
+    if kind == "persistent":
+        mu[:, 0] = 0.20 / 252                       # one strategy is truly better, always
+    else:
+        for y in range(years):                      # leadership rotates every year, so past winners lead nothing
+            mu[y * 252:(y + 1) * 252, (y * 2) % n] = 0.25 / 252
+            mu[y * 252:(y + 1) * 252, (y * 2 + 1) % n] = 0.0
+    r = mu + rng.normal(0, 0.008, mu.shape)
+    return pd.DataFrame(1_000_000 * np.cumprod(1 + r, axis=0), index=idx, columns=[f"s{i}" for i in range(n)])
+
+
+def test_switcher_uses_only_the_past_and_pays_tax_on_switching():
+    from pe import switcher
+    from pe.config import load_settings
+    s = load_settings()
+    navs = _synthetic_navs("rotating")
+    start, end = navs.index[300], navs.index[-1]
+    full = switcher.run(navs, "momentum_switch", s, start, end)
+    cut = switcher.run(navs.iloc[:-200], "momentum_switch", s, start, navs.index[-201])
+    assert np.allclose(full["nav"].loc[cut["nav"].index].to_numpy(), cut["nav"].to_numpy())      # future data cannot change the past
+    assert full["moves"] > 0 and full["tax_paid"] > 0 and full["costs"] > 0
+    fixed = switcher.run(navs, "s0", s, start, end)
+    assert fixed["moves"] == 0 and fixed["costs"] == 0
+
+
+def test_switcher_verdict_is_cautious_when_winners_rotate():
+    from pe import switcher
+    from pe.config import load_settings
+    res = switcher.evaluate(_synthetic_navs("rotating"), load_settings())
+    assert all(v.startswith("no reliable edge") for v in res["verdict"].values())
+    assert "equal_weight" in switcher.report(res)
