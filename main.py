@@ -180,6 +180,8 @@ def cmd_site(args):
     data["example"] = example
     dpath = ROOT / "reports" / "daily_sim.json"
     data["daily_sim"] = _json.loads(dpath.read_text()) if dpath.exists() else None
+    apath = ROOT / "reports" / "daily_sim_all.json"
+    data["daily_sim_all"] = _json.loads(apath.read_text()) if apath.exists() else None
     out = site.render(data, ROOT / settings["report"]["out_dir"] / ("example.html" if example else "index.html"))
     print(f"Decision: {data['verdict']['call']} - {data['verdict']['headline']}\nSaved {out}")
     return out
@@ -230,6 +232,7 @@ def main():
     vp.add_argument("--years", type=int, default=10); vp.add_argument("--window-years", type=int, default=3); vp.add_argument("--refresh", action="store_true")
     dp = sub.add_parser("simulate-daily", help="follow the engine every day for the last 10, 5 and 2 years, from a Nifty ETF start (slow)")
     dp.add_argument("--years", default="10,5,2"); dp.add_argument("--workers", type=int, default=6)
+    dp.add_argument("--all-strategies", action="store_true", help="run every strategy daily on the core universe")
     sub.add_parser("compare", help="compare metals, semiconductors and other assets in India and abroad, after cost and tax")
     sub.add_parser("shell", help="guided interactive shell with autocomplete: profile, imports, check, site")
     sub.add_parser("reset-window")
@@ -262,9 +265,15 @@ def main():
         cmd_validate(args)
     elif args.cmd == "simulate-daily":
         from pe import daily_sim
-        out = daily_sim.simulate(tuple(int(x) for x in args.years.split(",")), workers=args.workers)
-        show_md(daily_sim.report(out))
-        print("\nSaved reports/daily_sim.md")
+        yrs = tuple(int(x) for x in args.years.split(","))
+        if args.all_strategies:
+            daily_sim.simulate_all(yrs, workers=args.workers)
+            show_md((ROOT / "reports" / "daily_sim_all.md").read_text())
+            print("\nSaved reports/daily_sim_all.md")
+        else:
+            out = daily_sim.simulate(yrs, workers=args.workers)
+            show_md(daily_sim.report(out))
+            print("\nSaved reports/daily_sim.md")
     elif args.cmd == "compare":
         cmd_compare(args)
     elif args.cmd == "shell":

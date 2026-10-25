@@ -374,7 +374,7 @@ function buildReplay(p){
         g.addEventListener('click',pick); g.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); pick(); } }); svg.append(g); });
       host.append(svg);
     };
-    box.append(el('p',{class:'small muted'},'Most clever strategies lost to simply holding once tax was counted. Today\'s tax rules are applied to all ten years.'));
+    box.append(el('p',{class:'small muted'},'This test starts fresh in every 3-year window, so it shows how much the result depends on when you start. A strategy can finish one long run ahead and still lose in most shorter stretches. Today\'s tax rules are applied to all ten years.'));
     draws.push(drawE);
   }
   const S=D.daily_sim;
@@ -427,7 +427,33 @@ function buildReplay(p){
     function openEntry(j){ const d=entries[j]; if(!d) return; d.open=true; d.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center'}); d.querySelector('summary').focus({preventScroll:true}); }
     drawT(); draws.push(drawS);
   }
-  if (!B && !V && !S) p.append(el('p',{class:'muted'},'Run python main.py site to add the replay, and python main.py validate for the 10-year test.'));
+  const SA=D.daily_sim_all;
+  if (SA){
+    const box=el('div',{class:'panel block'}); const anchor=p.children[S?3:1]; p.insertBefore(box, anchor||null);
+    const hz=[...new Set(SA.results.map(r=>r.years))].sort((a,b)=>b-a); let h=hz[0];
+    box.append(el('h2',{},'Every strategy, followed daily'), el('p',{class:'small muted'},'Same start and rules for each: the engine run every day on the usual ETF list, every order followed, after fees and tax. Bars show how many points a year each one finished ahead of or behind just holding. Click a bar for the details.'));
+    const pk=el('div',{class:'pick',role:'group','aria-label':'Period'}), say=el('p',{style:'font-weight:500'}), host=el('div'), info=el('div',{class:'event'});
+    hz.forEach(y=>pk.append(el('button',{type:'button','aria-pressed':String(y===h),'data-y':String(y),onclick:()=>{ h=y; pk.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.y==String(y)))); info.innerHTML=''; info.append(el('p',{class:'muted'},'Click a bar.')); drawA(); }}, `Last ${y} years`)));
+    box.append(pk, say, host, legend([{name:'Beat holding',color:css('--buy')},{name:'Lost to holding',color:css('--sell')}]), info, el('p',{class:'small muted'},'Short periods reward whatever happened to boom: gold rose about 78% in rupees over the last two years, so anything that rotated into gold looks brilliant there. The 10-year column is the fairest test, and even it includes strategies chosen with hindsight.'));
+    info.append(el('p',{class:'muted'},'Click a bar.'));
+    function drawA(){
+      const rows=SA.results.filter(r=>r.years===h), base=rows.find(r=>r.policy==='buy_hold'), others=rows.filter(r=>r!==base).map(r=>Object.assign({},r,{gap:r.cagr_after_tax-base.cagr_after_tax})).sort((a,b)=>b.gap-a.gap);
+      const wins=others.filter(r=>r.gap>0).length;
+      say.textContent=`${wins} of ${others.length} strategies beat just holding (${pc(base.cagr_after_tax)} a year) over the last ${h} years.`;
+      host.innerHTML=''; const W=Math.max(host.clientWidth||600,300), rowH=32, lab=Math.min(280,W*.45), H=others.length*rowH+26; const gs=others.map(r=>r.gap); const lo=Math.min(0,...gs), hi=Math.max(0,...gs); const X=v=>lab+(W-lab-60)*(v-lo)/((hi-lo)||1);
+      const svg=sv('svg',{viewBox:`0 0 ${W} ${H}`,width:'100%',height:H,role:'img','aria-label':'Yearly gap against just holding, by strategy'});
+      svg.append(sv('line',{x1:X(0),x2:X(0),y1:0,y2:H-20,stroke:css('--faint')}), sv('text',{x:X(0),y:H-4,'text-anchor':'middle','font-size':12,fill:css('--muted')},'Holding'));
+      const short=t=>{ const m=Math.floor(lab/7.2); return t.length>m?t.slice(0,m-1)+'...':t; };
+      others.forEach((r,k)=>{ const y=k*rowH+4, x0=Math.min(X(0),X(r.gap)), w=Math.max(2,Math.abs(X(r.gap)-X(0)));
+        const g=sv('g',{tabindex:0,role:'button','aria-label':`${r.label}: ${spc(r.gap)} a year against holding`,style:'cursor:pointer'});
+        g.append(sv('rect',{x:0,y,width:W,height:rowH-2,fill:'transparent'}), sv('text',{x:lab-10,y:y+16,'text-anchor':'end','font-size':13,fill:css('--ink')},short(r.label)), sv('rect',{x:x0,y:y+5,width:w,height:16,rx:3,fill:r.gap>=0?css('--buy'):css('--sell')}), sv('text',{x:r.gap>=0?X(r.gap)+6:X(0)+6,y:y+17,'font-size':12,fill:css('--muted')},(r.gap>=0?'+':'')+(r.gap*100).toFixed(1)));
+        const pick=()=>{ info.innerHTML=''; info.append(el('h3',{},r.label), el('p',{class:'muted'},`${pc(r.cagr_after_tax)} a year after tax, ending at ${lakh(r.final_value_after_tax)} against ${lakh(base.final_value_after_tax)} for holding. Worst fall ${pc(r.max_drawdown)} against ${pc(base.max_drawdown)}. Traded on ${r.trade_days} days; tax ${lakh(r.taxes_paid)}, fees ${lakh(r.costs)}.`)); };
+        g.addEventListener('click',pick); g.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); pick(); } }); svg.append(g); });
+      host.append(svg);
+    }
+    draws.push(drawA);
+  }
+  if (!B && !V && !S && !SA) p.append(el('p',{class:'muted'},'Run python main.py site to add the replay, and python main.py validate for the 10-year test.'));
   redraw.record = () => draws.forEach(f=>f());
 }
 

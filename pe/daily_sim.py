@@ -26,6 +26,11 @@ def _one(job: tuple) -> dict:
     from .validate import load_long
     years, label, policy, freq, universe = job
     s, px, vix, closes = load_long(10)
+    first = px.apply(lambda c: c.first_valid_index())
+    px = px.ffill()          # holidays and dropped bad prints leave gaps; carry the last price, never back-fill before listing
+    for c, d0 in first.items():
+        if d0 is not None:
+            px.loc[:d0 - pd.Timedelta(days=1), c] = np.nan
     if universe == "full":       # every instrument with prices may be picked, including single stocks
         for a in s.assets.values():
             if a.symbol != "CASH":
@@ -53,6 +58,37 @@ def _one(job: tuple) -> dict:
             "taxes_paid": m["taxes_paid"] + liq, "costs": m["costs"], "fills": len(trades), "decisions": len(decisions),
             "trade_days": len({str(e[0]) for e in trades}),
             "curve": {"dates": [str(d.date()) for d in nav.index[::3]], "values": [round(float(v)) for v in nav.iloc[::3]]}}
+
+
+ALL_POLICIES = {"core_xs": "Core-satellite without core overlay", "core_satellite": "Core-satellite with trend overlay",
+                "xs_momentum": "Cross-sectional momentum, top 3", "dual_momentum": "Dual momentum (Nifty/gold/cash)",
+                "trend_vol": "Trend filter + volatility targeting", "risk_parity": "Risk parity", "daa": "Defensive asset allocation",
+                "custom": "Keep holdings, exit on technicals", "static_mix": "Static mix 55/20/10/15", "rp_blend": "Half Nifty + half risk parity"}
+
+
+def simulate_all(horizons=(10, 5, 2), workers: int = 10) -> dict:
+    """Every strategy followed daily on the core universe, against just holding."""
+    jobs = [(y, "Just hold the Nifty ETFs", "buy_hold", "monthly", "core") for y in horizons]
+    jobs += [(y, name, pol, "daily", "core") for y in horizons for pol, name in ALL_POLICIES.items()]
+    with ProcessPoolExecutor(workers) as ex:
+        res = list(ex.map(_one, jobs))
+    for r in res:
+        r["journal"], r["fills"] = [], []
+    out = {"lump": LUMP, "run_on": str(date.today()), "results": res}
+    (ROOT / "reports" / "daily_sim_all.json").write_text(json.dumps(out, default=str))
+    L = ["# Every strategy, followed daily", "", "Same start and rules as the daily simulation: Rs 10 lakh in the two Nifty 50 ETFs, the engine run each day "
+         "on data up to that day, every order followed, fees and tax included. Core universe. Gap = yearly return after tax minus just holding.", ""]
+    for y in sorted(horizons, reverse=True):
+        rows = [r for r in res if r["years"] == y]
+        base = next(r for r in rows if r["policy"] == "buy_hold")
+        L += [f"## Last {y} years", "", "| strategy | per year after tax | gap vs holding | worst fall | days with trades | beat holding? |", "|---|---|---|---|---|---|"]
+        for r in sorted(rows, key=lambda r: -(r["cagr_after_tax"] or -9)):
+            gap = (r["cagr_after_tax"] or 0) - base["cagr_after_tax"]
+            L.append(f"| {r['label']} | {r['cagr_after_tax']:.1%} | {'-' if r is base else f'{gap * 100:+.1f}'} | {r['max_drawdown']:.1%} | {r['trade_days']} | "
+                     f"{'-' if r is base else ('yes' if gap > 0 else 'no')} |")
+        L.append("")
+    (ROOT / "reports" / "daily_sim_all.md").write_text("\n".join(L))
+    return out
 
 
 def simulate(horizons=(10, 5, 2), policy: str | None = None, workers: int = 6) -> dict:
