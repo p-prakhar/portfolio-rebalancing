@@ -17,7 +17,8 @@ import pandas as pd
 from .config import Lot, Settings
 from .costs import fx_cost, leg_cost
 from .engine import Trade, make_plan
-from .stopping import secretary_decision
+from .stopping import secretary_decision, threshold_decision
+from .timing import apply_gate
 from .tax import BUCKETS, bucket_for, compute_tax, fy_start_year, is_long_term
 
 VARIANTS = [
@@ -46,6 +47,7 @@ class Leg:
     n: int
     observed: list = field(default_factory=list)
     done_frac: float = 0.0
+    sigma: float = 0.01
 
 
 @dataclass
@@ -102,11 +104,21 @@ def _check_days(idx: pd.DatetimeIndex, freq: str) -> set:
     if freq == "daily":
         return set(idx)
     s = pd.Series(idx, index=idx)
-    key = s.dt.to_period("M") if freq == "monthly" else s.dt.to_period("W")
+    if freq == "annual_mar":        # once a year in March, before the Indian tax year closes
+        s = s[s.dt.month == 3]
+        return set(s.groupby(s.dt.year).first().values)
+    key = {"monthly": s.dt.to_period("M"), "weekly": s.dt.to_period("W"), "quarterly": s.dt.to_period("Q")}[freq]
     return set(s.groupby(key).first().values)
 
 
-def run_variant(name, policy, execution, harvest, init_lots, px, vix, settings: Settings, start, fx=None):
+def run_variant(name, policy, execution, harvest, init_lots, px, vix, settings: Settings, start, fx=None, opts: dict | None = None):
+    """`opts` (optional) changes the timing rules for this variant: check (frequency), gate (name), gate_args, window_days, ltcg_wait_max_days."""
+    opts = opts or {}
+    if any(k in opts for k in ("check", "window_days", "ltcg_wait_max_days")):
+        settings = copy.deepcopy(settings)
+        settings.raw["timing"].update({"check_frequency": opts.get("check", settings.timing["check_frequency"]),
+                                       "window_days": opts.get("window_days", settings.timing["window_days"]),
+                                       "ltcg_wait_max_days": opts.get("ltcg_wait_max_days", settings.timing["ltcg_wait_max_days"])})
     idx = px.index[px.index >= start]
     tm = settings.timing
     checks = _check_days(idx, tm["check_frequency"])
@@ -140,6 +152,14 @@ def run_variant(name, policy, execution, harvest, init_lots, px, vix, settings: 
                     frac = 1 - leg.done_frac
                 else:
                     continue
+            elif leg.mode == "threshold":
+                leg.observed.append(p)
+                funded = t.side == "sell" or not any(l.trade.side == "sell" and l.done_frac < 1 for l in pending)
+                dec, _ = threshold_decision(leg.observed, leg.n, t.side, leg.sigma, opts.get("z", 0.5))
+                if dec == "execute" and funded or len(leg.observed) >= leg.n + 5:
+                    frac = 1 - leg.done_frac
+                else:
+                    continue
             elif leg.mode == "twap":
                 frac = min(1 / leg.n, 1 - leg.done_frac)
             else:
@@ -159,10 +179,16 @@ def run_variant(name, policy, execution, harvest, init_lots, px, vix, settings: 
             hist = px.loc[:ts]
             plan = make_plan(ts, book.lots, book.cash, hist, vix.loc[:ts] if vix is not None else None, settings,
                              book.fy_realised, policy, harvest, usd_inr=usd_inr)
+            if opts.get("gate"):
+                kept, gate_why = apply_gate(plan, book, opts["gate"], opts.get("gate_args", {}), settings)
+                if gate_why:
+                    book.log.append((day, "HOLD", gate_why))
+                plan.trades = kept
             for t in plan.trades:
                 immediate = execution == "immediate" or t.kind.startswith("harvest") or \
                     (t.kind == "risk_exit" and tm["regime_override_secretary"])
-                pending.append(Leg(t, "immediate" if immediate else execution, 1 if immediate else tm["window_days"]))
+                sig = float(hist[t.symbol].pct_change().iloc[-60:].std()) if t.symbol in hist and t.symbol != "CASH" else 0.01
+                pending.append(Leg(t, "immediate" if immediate else execution, 1 if immediate else tm["window_days"], sigma=sig if sig == sig else 0.01))
                 book.log.append((day, "PLAN", f"{t.side} {t.symbol} Rs {t.value:,.0f} [{t.kind}] - {t.why[0] if t.why else ''}"))
             if plan.trades:
                 reg = plan.target.regime or {}
@@ -214,8 +240,8 @@ def metrics(nav: pd.Series, book: Book, accrued: float, liq_tax: float, cash_rat
 
 def run_all(init_lots, px, vix, settings: Settings, start, fx=None, variants=VARIANTS):
     curves, rows, logs = [], [], {}
-    for name, policy, ex, hv in variants:
-        nav, book, accrued, liq = run_variant(name, policy, ex, hv, init_lots, px, vix, settings, start, fx)
+    for name, policy, ex, hv, *rest in variants:
+        nav, book, accrued, liq = run_variant(name, policy, ex, hv, init_lots, px, vix, settings, start, fx, rest[0] if rest else None)
         curves.append(nav)
         m = metrics(nav, book, accrued, liq, settings["cash"]["rate"])
         m["strategy"] = name
