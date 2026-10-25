@@ -6,7 +6,7 @@ _Version of 25 Oct 2026. Written to be read on its own, with no access to the co
 
 You are asked to act as a hostile but fair reviewer: a quantitative researcher, an Indian chartered accountant and a retail-investing sceptic in one. Find what is wrong, overfitted, mis-specified, illegal, misleading or missing. Section 15 lists the questions I most want answered. Please separate (a) errors of fact (tax law, costs, market rules), (b) errors of method (backtest, statistics), and (c) judgement calls where you would decide differently. Cite sources where you can. If you think the project should be reduced to "buy a Nifty index fund and harvest the tax exemption each year", say so and say why.
 
-**Status of the evidence, in one paragraph.** The engine is decision support: it never places orders. The 10-year results below come from one data source (Yahoo Finance), one market (mostly India, plus a few US ETFs), strategies that were designed and screened on that same history, and today's tax rules applied to all years. Several newer components (crash guard, strategy switcher, valuation and forecast overlays) have been built and unit-tested on synthetic data only, because the build environment could not reach market data; they have **no real-data results yet**. Treat every performance number as optimistic until shown otherwise.
+**Status of the evidence, in one paragraph.** The engine is decision support: it never places orders. The 10-year results below come from one data source (Yahoo Finance), one market (mostly India, plus a few US ETFs), strategies that were designed and screened on that same history, and today's tax rules applied to all years. The crash guard now has a real-data replay (Section 8). The strategy switcher and the valuation and forecast overlays have been built and unit-tested on synthetic data only and have **no real-data results yet** (runs in progress). Treat every performance number as optimistic until shown otherwise.
 
 ---
 
@@ -115,7 +115,7 @@ Itemised per venue (config file):
 
 **The hurdle for a rotation.** Expected benefit B = min(alpha_cap, shrink × trailing momentum spread) × horizon, with shrink 0.25, alpha_cap 12% a year and horizon 6 months. Execute if B ≥ switch_safety × (costs + economic tax cost), with switch_safety 1.25. Drifts under 3% of the portfolio are ignored. Risk-off exits skip the hurdle. These constants (0.25, 12%, 6 months, 1.25, 3%) are judgement, not estimates.
 
-## 8. The crash guard (open pull request)
+## 8. The crash guard (open pull request) and its 10-year result
 
 An overlay on any policy. Purpose: leave quickly and cheaply when a bubble bursts, whatever the story. Six daily signal families on a market proxy (60% Nifty ETF, 40% S&P 500):
 
@@ -137,7 +137,27 @@ A recent run-up (market in the top 5% of its 3-year extension within the last 4 
 
 The freed money goes to cash plus gold (only while gold is above its 200-day average, since gold also falls in liquidity squeezes). Whipsaw defences: families must agree, price alone cannot exceed "watch", a level steps down only after 15 calm days, and the level is recomputed from history so live and backtest agree. Exits go through the normal planner, so tax-smart lots and all costs apply. A drill shows what an exit would cost today and how far the market must fall further for it to pay for itself. Buy-and-hold books remember their pre-exit weights so an all-clear restores them.
 
-**Status:** thresholds are textbook values chosen before any backtest. Only synthetic paths have been run. The 10-year replay (`crash-test`, every fall vs every false alarm, after costs and tax) has not been run on real data. Ten years contain only a handful of real crashes, so even when run it gives case studies, not statistics. The guard's own audit of the older strategies found that the default never sold its core, checks were monthly, and the regime label was decoration.
+**Status:** thresholds are textbook values chosen before any backtest and were not tuned on the test data. The 10-year real-data replay (`crash-test`, Oct 2016 to Oct 2026, Rs 10 lakh lump sum, lots, costs and today's tax rules, Yahoo data) has now been run.
+
+| Strategy | After-tax CAGR | Max drawdown | Tax paid (Rs) | Costs (Rs) |
+|---|---|---|---|---|
+| Buy and hold Nifty ETF | 10.4% | -36.3% | 0 | 0 |
+| Buy and hold + crash guard | 8.9% | -14.0% | 2,194 | 6,981 |
+| Core-satellite (`core_xs`) | 12.7% | -23.3% | 120,709 | 26,149 |
+| Core-satellite + crash guard | 9.8% | -18.4% | 76,750 | 42,344 |
+
+Days at each level over the ten years: calm 1,721, watch 380, elevated 172, crisis 195.
+
+**Falls of 10% or more in the buy-and-hold portfolio** (market peak-to-trough; guard flagged = first day at "elevated"):
+- Aug to Oct 2018, market -12.2%: guard **never flagged**; guarded buy and hold lost -14.0%.
+- Jan to Mar 2020, market -32.6%: flagged 41 days after the peak with the market only -7.2% down; guarded buy and hold lost -12.5% against -36.3% unguarded. This one episode does most of the work.
+- Oct 2021 to Jun 2022, market -14.9%: flagged 129 days after the peak at -7.8%; guarded buy and hold lost -2.4%.
+- Sep 2024 to Mar 2025, market -12.3%: guard **never flagged** until after the fall; guarded buy and hold -2.0% but the core-satellite plus guard lost -18.4%, worse than unguarded buy and hold (-15.2%).
+- Jan to Mar 2026, market -9.9%: flagged at -6.0%; guarded buy and hold -9.3%.
+
+**Whipsaw ledger:** the guard reached elevated or worse 8 times. Only 1 was justified (Feb 2020: a further -27.4% followed within 120 days). The other 7 were false alarms, during which the market *rose* 3% to 9% while the investor was out (for example +7.6% during May to Sep 2022 and +8.8% during Mar to May 2025).
+
+**Reading:** the guard cuts the worst drawdown from -36% to -14% and costs 1.4 points a year after tax plus about Rs 9,000 of extra tax and fees. On the core-satellite default it reduces the drawdown from -23% to -18% but gives up 2.9 points a year, a poor trade. With only one large crash in the sample, the benefit rests on a single episode (COVID 2020); two falls of about 12% (2018 and 2024 to 2025) were missed entirely; and 7 of 8 alarms were false. I do not regard this as evidence that the guard is worth running, only as a cost-of-insurance estimate. The guard's own audit of the older strategies found that the default never sold its core, checks were monthly, and the regime label was decoration.
 
 ## 9. Execution and timing: the secretary rule and others
 
@@ -217,7 +237,7 @@ Tax edges: annual exemption harvest via the two-AMC swap (worth roughly 12.5% of
 8. **ETF liquidity and tracking** modelled by a flat half-spread; wide spreads in panics are not modelled; NSE-listed international ETFs can trade at 5% to 10% premiums.
 9. **No advance-tax timing, no dividends, no TCS cash drag, no Schedule FA, no loss carry-forward.**
 10. **Secretary rule** is applied to a non-i.i.d. price series; it may be pure behavioural scaffolding.
-11. **Crash guard** has no real-data validation and, by design, will fire false alarms.
+11. **Crash guard:** real-data replay shows 7 false alarms in 8, two missed ~12% falls, and a benefit that rests on one crash (2020). Its thresholds are untuned, and tuning them on this history would overfit.
 12. **Behavioural risk:** the user, not the engine, executes; the report's complexity may itself drive bad overrides.
 13. **Model risk in the asset-class comparison** (flats, farmland, Dubai flat): inputs are assumptions, not data.
 14. **Regulatory risk:** I did not check whether a retail user running this on someone else's money would need registration (this is for one person's own money).
