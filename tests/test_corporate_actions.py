@@ -151,3 +151,47 @@ def test_sync_holdings_file(tmp_path):
     assert syms == {"TMPV", "TMCV"}
     assert "TMPV" in doc.get("assets", {})
     assert "TMCV" in doc.get("assets", {})
+
+
+def test_reapplying_actions_is_idempotent():
+    """Keep-parent demergers and splits leave the symbol unchanged, so a second pass must not compound."""
+    actions = CorporateActions(
+        demergers=[Demerger(parent="PARENT", date=date(2023, 7, 20), name="spin-off", keep_parent=True,
+                            parent_cost_share=0.95,
+                            resulting=[ResultingEntity(symbol="CHILD", ratio=1.0, cost_share=0.05)])],
+        splits=[Split(symbol="SPLITCO", date=date(2024, 5, 15), ratio=5.0)],
+    )
+    lots = [Lot("PARENT", 100.0, date(2023, 1, 15), 2000.0), Lot("SPLITCO", 20.0, date(2024, 1, 10), 500.0)]
+    once, _ = apply_corporate_actions(lots, actions)
+    twice, notices = apply_corporate_actions(once, actions)
+    assert twice == once and not notices
+    # also through the dict / holdings.yaml route
+    dicts = [{"symbol": "PARENT", "qty": 100.0, "buy_date": "2023-01-15", "price": 2000.0}]
+    d1, _ = apply_corporate_actions(dicts, actions)
+    d2, _ = apply_corporate_actions(d1, actions)
+    assert d1 == d2 and len(d1) == 2
+    assert sum(l["qty"] * l["price"] for l in d2) == pytest.approx(200000.0)
+
+
+def test_sync_holdings_file_twice_is_stable(tmp_path):
+    h = tmp_path / "holdings.yaml"
+    h.write_text("lots:\n  - {symbol: RELIANCE, qty: 100, buy_date: '2023-01-15', price: 2000}\n"
+                 "  - {symbol: INFY, buy_date: '2023-03-01', amount_inr: 5000}\ncash_inr: 0\n")
+    assert sync_holdings_file(h)[0]
+    first = h.read_text()
+    assert sync_holdings_file(h) == (False, [])
+    assert h.read_text() == first
+    assert load_holdings(h, apply_actions=False).lots[0].adjusted     # marker survives the round trip
+
+
+def test_buy_on_ex_date_is_not_entitled():
+    lots = [Lot("TATAMOTORS", 10.0, date(2025, 10, 13), 500.0), Lot("TATAMOTORS", 10.0, date(2025, 10, 14), 500.0)]
+    new_lots, _ = apply_corporate_actions(lots)
+    assert sorted((l.symbol, l.buy_date.day) for l in new_lots) == [("TATAMOTORS", 14), ("TMCV", 13), ("TMPV", 13)]
+
+
+def test_explicit_ex_date_overrides_record_date():
+    actions = CorporateActions(splits=[Split(symbol="X", date=date(2024, 5, 15), ratio=2.0, ex_date=date(2024, 5, 14))])
+    lots = [Lot("X", 1.0, date(2024, 5, 13), 100.0), Lot("X", 1.0, date(2024, 5, 14), 100.0)]
+    new_lots, _ = apply_corporate_actions(lots, actions)
+    assert [(l.qty, l.price) for l in new_lots] == [(2.0, 50.0), (1.0, 100.0)]

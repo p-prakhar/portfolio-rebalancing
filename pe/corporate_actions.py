@@ -41,6 +41,7 @@ class Demerger:
     keep_parent: bool = False
     parent_cost_share: float = 0.0
     resulting: list[ResultingEntity] = field(default_factory=list)
+    ex_date: date | None = None
 
 
 @dataclass
@@ -49,6 +50,7 @@ class Split:
     date: date
     ratio: float
     name: str = ""
+    ex_date: date | None = None
 
 
 @dataclass
@@ -58,6 +60,7 @@ class Merger:
     date: date
     ratio: float = 1.0
     name: str = ""
+    ex_date: date | None = None
 
 
 @dataclass
@@ -69,6 +72,23 @@ class CorporateActions:
     def all_events_sorted(self) -> list[Demerger | Split | Merger]:
         events = list(self.demergers) + list(self.splits) + list(self.mergers)
         return sorted(events, key=lambda e: e.date)
+
+
+def event_id(ev: Demerger | Split | Merger) -> str:
+    if isinstance(ev, Demerger):
+        return f"demerger:{ev.parent}:{ev.date}"
+    if isinstance(ev, Split):
+        return f"split:{ev.symbol}:{ev.date}"
+    return f"merger:{ev.old_symbol}:{ev.date}"
+
+
+def entitled_before(ev: Demerger | Split | Merger) -> date:
+    """A lot is affected only if bought strictly before the ex-date (a trade on the ex-date does not qualify).
+
+    Defaults to `date`; under T+1 settlement the record date equals the ex-date. Set `ex_date` in the YAML
+    when they differ (T+2 era events have ex-date one trading day before the record date).
+    """
+    return ev.ex_date or ev.date
 
 
 def _to_date(val: Any) -> date:
@@ -107,6 +127,7 @@ def load_corporate_actions(path: str | Path | None = None) -> CorporateActions:
                 keep_parent=bool(d.get("keep_parent", False)),
                 parent_cost_share=float(d.get("parent_cost_share", 0.0)),
                 resulting=res,
+                ex_date=_to_date(d["ex_date"]) if d.get("ex_date") else None,
             )
         )
 
@@ -116,6 +137,7 @@ def load_corporate_actions(path: str | Path | None = None) -> CorporateActions:
             date=_to_date(s["date"]),
             ratio=float(s["ratio"]),
             name=s.get("name", f"{s['symbol']} split {s['ratio']}:1"),
+            ex_date=_to_date(s["ex_date"]) if s.get("ex_date") else None,
         )
         for s in doc.get("splits", [])
     ]
@@ -127,6 +149,7 @@ def load_corporate_actions(path: str | Path | None = None) -> CorporateActions:
             date=_to_date(m["date"]),
             ratio=float(m.get("ratio", 1.0)),
             name=m.get("name", f"{m['old_symbol']} -> {m['new_symbol']}"),
+            ex_date=_to_date(m["ex_date"]) if m.get("ex_date") else None,
         )
         for m in doc.get("mergers", [])
     ]
@@ -142,7 +165,7 @@ def apply_corporate_actions(
     """Apply corporate actions chronologically to a list of lots.
 
     Works on either Lot dataclass instances or dict representations.
-    Lots purchased on or before an event's record date are transformed.
+    Lots bought before an event's ex-date are transformed once; each lot records the events already applied.
     """
     if actions is None:
         actions = load_corporate_actions()
@@ -160,54 +183,44 @@ def apply_corporate_actions(
         next_lots: list[Lot | dict] = []
         action_applied = False
 
+        eid = event_id(event)
         for item in current_lots:
             is_obj = isinstance(item, Lot)
+            if not is_obj and "qty" not in item:   # amount-only (pending) entries carry no quantity
+                next_lots.append(item)
+                continue
             sym = item.symbol if is_obj else item["symbol"]
             buy_dt = _to_date(item.buy_date if is_obj else item["buy_date"])
             qty = float(item.qty if is_obj else item["qty"])
             price = float(item.price if is_obj else item["price"])
-            extra = {} if is_obj else {k: v for k, v in item.items() if k not in ("symbol", "qty", "buy_date", "price")}
+            done = tuple(item.adjusted if is_obj else (item.get("adjusted") or ()))
+            extra = {} if is_obj else {k: v for k, v in item.items() if k not in ("symbol", "qty", "buy_date", "price", "adjusted")}
 
-            if buy_dt > event.date:
-                # Lot was bought after the event record date; unaffected
+            if buy_dt >= entitled_before(event) or eid in done:
+                # bought on/after the ex-date (not entitled), or this event is already reflected in the lot
                 next_lots.append(item)
                 continue
+
+            def emit(new_sym: str, new_q: float, new_p: float) -> None:
+                marks = done + (eid,)
+                if is_obj:
+                    next_lots.append(Lot(new_sym, new_q, buy_dt, new_p, marks))
+                else:
+                    next_lots.append({"symbol": new_sym, "qty": new_q, "buy_date": str(buy_dt), "price": new_p,
+                                      **extra, "adjusted": list(marks)})
 
             if isinstance(event, Demerger) and sym == event.parent:
                 action_applied = True
                 if event.keep_parent:
-                    adj_price = round(price * event.parent_cost_share, 4)
-                    if is_obj:
-                        next_lots.append(Lot(sym, qty, buy_dt, adj_price))
-                    else:
-                        next_lots.append({"symbol": sym, "qty": qty, "buy_date": str(buy_dt), "price": adj_price, **extra})
-
+                    emit(sym, qty, round(price * event.parent_cost_share, 4))
                 for entity in event.resulting:
-                    new_q = round(qty * entity.ratio, 6)
-                    new_p = round((price * entity.cost_share) / entity.ratio, 4)
-                    if is_obj:
-                        next_lots.append(Lot(entity.symbol, new_q, buy_dt, new_p))
-                    else:
-                        next_lots.append({"symbol": entity.symbol, "qty": new_q, "buy_date": str(buy_dt), "price": new_p, **extra})
-
+                    emit(entity.symbol, round(qty * entity.ratio, 6), round((price * entity.cost_share) / entity.ratio, 4))
             elif isinstance(event, Split) and sym == event.symbol:
                 action_applied = True
-                new_q = round(qty * event.ratio, 6)
-                new_p = round(price / event.ratio, 4)
-                if is_obj:
-                    next_lots.append(Lot(sym, new_q, buy_dt, new_p))
-                else:
-                    next_lots.append({"symbol": sym, "qty": new_q, "buy_date": str(buy_dt), "price": new_p, **extra})
-
+                emit(sym, round(qty * event.ratio, 6), round(price / event.ratio, 4))
             elif isinstance(event, Merger) and sym == event.old_symbol:
                 action_applied = True
-                new_q = round(qty * event.ratio, 6)
-                new_p = round(price / event.ratio, 4)
-                if is_obj:
-                    next_lots.append(Lot(event.new_symbol, new_q, buy_dt, new_p))
-                else:
-                    next_lots.append({"symbol": event.new_symbol, "qty": new_q, "buy_date": str(buy_dt), "price": new_p, **extra})
-
+                emit(event.new_symbol, round(qty * event.ratio, 6), round(price / event.ratio, 4))
             else:
                 next_lots.append(item)
 
@@ -257,13 +270,17 @@ def apply_to_holdings(
             p_dt = _to_date(p["buy_date"])
             handled = False
             for ev in events:
-                if isinstance(ev, Demerger) and p["symbol"] == ev.parent and p_dt <= ev.date:
+                if isinstance(ev, Demerger) and p["symbol"] == ev.parent and p_dt < entitled_before(ev):
                     handled = True
                     if ev.keep_parent:
                         new_pending.append({"symbol": ev.parent, "buy_date": p_dt, "amount_inr": p["amount_inr"] * ev.parent_cost_share})
                     for ent in ev.resulting:
                         new_pending.append({"symbol": ent.symbol, "buy_date": p_dt, "amount_inr": p["amount_inr"] * ent.cost_share})
                     break
+            for ev in events:
+                if not handled and isinstance(ev, Merger) and p["symbol"] == ev.old_symbol and p_dt < entitled_before(ev):
+                    handled = True
+                    new_pending.append({**p, "symbol": ev.new_symbol})
             if not handled:
                 new_pending.append(p)
         holdings.pending_amounts = new_pending

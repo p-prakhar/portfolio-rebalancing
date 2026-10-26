@@ -58,6 +58,7 @@ class Lot:
     qty: float
     buy_date: date
     price: float            # INR cost per unit
+    adjusted: tuple = ()    # ids of corporate actions already applied to this lot (keeps re-applying idempotent)
 
     @property
     def cost(self) -> float:
@@ -107,7 +108,8 @@ def load_holdings(path: str | Path | None = None, apply_actions: bool = True) ->
         if extra:
             meta.setdefault(l["symbol"], {}).update(extra)
         if "qty" in l:
-            lots.append(Lot(l["symbol"], float(l["qty"]), _to_date(l["buy_date"]), float(l["price"])))
+            lots.append(Lot(l["symbol"], float(l["qty"]), _to_date(l["buy_date"]), float(l["price"]),
+                            tuple(l.get("adjusted") or ())))
         else:
             pending.append({"symbol": l["symbol"], "buy_date": _to_date(l["buy_date"]),
                             "amount_inr": float(l["amount_inr"])})
