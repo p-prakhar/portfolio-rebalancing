@@ -126,6 +126,16 @@ universe:
 cash:
   rate: 0.065                    # annual pre-tax yield of the cash vehicle
 
+goals:                           # goal-based withdrawals (pe/goals.py); planning assumptions, not forecasts
+  glide_start_years: 5           # a goal starts moving to safe assets this far from its date
+  glide_start_years_nice: 3      # same for goals marked priority: nice
+  fully_safe_years: 1            # fully backed by safe assets inside this horizon
+  safe_return: 0.065             # cash sleeve / debt / FD, pre-tax, per year
+  risky_return: 0.09             # conservative growth-asset return for projections
+  stress_drop: 0.35              # fall in growth assets used for the stress cover check
+  buffer: 0.03                   # extra cushion on every goal for slippage and charges
+  safe_sleeves: [cash]           # sleeves counted as safe (debt funds are always safe)
+
 strategy:
   policy: core_xs         # buy_hold | custom | dual_momentum | xs_momentum | core_satellite | core_xs | static_mix | rp_blend | trend_vol | risk_parity | daa
   core_symbol: NIFTYBEES

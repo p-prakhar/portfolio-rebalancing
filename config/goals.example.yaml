@@ -1,0 +1,5 @@
+# Example goals with made-up numbers. Copy to config/goals.yaml (git-ignored) or use `goal` in the shell.
+# amount_inr is what you need in hand after tax and charges. priority: must | nice (nice starts de-risking later).
+goals:
+  - {name: house deposit, amount_inr: 800000, due: "2027-12-31", priority: must}
+  - {name: sabbatical,    amount_inr: 300000, due: "2029-06-30", priority: nice}

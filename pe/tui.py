@@ -41,6 +41,8 @@ COMMANDS = {
     "add-mf": "add one mutual fund purchase by hand",
     "mf": "your mutual funds: regular or direct, and whether switching pays",
     "add-other": "add PPF, EPF, NPS, gold, property and anything else",
+    "goal": "add money you need on a date (amount and when): the plan de-risks toward it",
+    "goals": "your goals: safe-asset glide path and the cheapest units to sell for each",
     "check": "today's plan as text",
     "crash": "crash guard: early-warning signals and what a fast exit would cost today",
     "crash-test": "replay past falls: drawdown saved vs false-alarm cost (slow first time)",
@@ -64,7 +66,7 @@ GROUPS = [
     ("About you", ["profile", "income"]),
     ("Load what you own", ["import-kite", "import-etrade", "import-mf", "add-fd", "add-mf", "add-lot", "add-other", "actions"]),
     ("See your savings", ["fds", "mf"]),
-    ("Decide", ["site", "check", "crash"]),
+    ("Decide", ["site", "check", "goal", "goals", "crash"]),
     ("Research (slower)", ["backtest", "validate", "simulate", "compare", "crash-test", "timing", "switch", "forecast", "gold", "silver"]),
     ("Shell", ["help", "quit"]),
 ]
@@ -421,6 +423,27 @@ def do_status() -> None:
         print("\n(Showing the example holdings. Import yours to replace them.)")
 
 
+def do_goal() -> None:
+    from . import goals as G
+    items = G.load_goals()
+    for g in items:
+        print(f"  {g.name:<20} Rs {g.amount_inr:>12,.0f} on {g.due} ({g.priority})")
+    act = _choice("Add or remove a goal?", ["add", "remove", "cancel"], "add") if items else "add"
+    if act == "cancel":
+        return
+    if act == "remove":
+        name = _choice("Which one", [g.name for g in items], items[0].name)
+        G.save_goals([g for g in items if g.name != name])
+        print(f"Removed {name}.")
+        return
+    name = _ask("Short name (e.g. house deposit)", default="goal 1")
+    amount = _number("Amount needed after tax (Rs)", None, 1)
+    due = _date("Needed on")
+    pri = _choice("Can it slip if markets fall?", ["must", "nice"], "must")
+    G.save_goals([g for g in items if g.name != name] + [G.Goal(name, amount, due, pri)])
+    print(f"Saved. From now `check` and `site` cap growth assets so this money is safe by {due}; `goals` shows which units to sell.")
+
+
 def do_corporate_actions() -> None:
     from .corporate_actions import Demerger, Merger, Split, load_corporate_actions, sync_holdings_file
     actions = load_corporate_actions()
@@ -570,6 +593,10 @@ def dispatch(cmd: str) -> bool:
         do_corporate_actions()
     elif cmd == "where":
         print(WHERE)
+    elif cmd == "goal":
+        do_goal()
+    elif cmd == "goals":
+        M.cmd_goals(_ns(amount=None, on=None, name=None))
     elif cmd == "check":
         M.cmd_run(_ns())
     elif cmd == "crash":
