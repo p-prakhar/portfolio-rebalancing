@@ -21,3 +21,4 @@ config/fds.yaml
 *.pdf
 BenefitHistory*
 tradebook*.csv
+config/goals.yaml

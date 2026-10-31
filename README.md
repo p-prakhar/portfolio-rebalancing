@@ -27,6 +27,8 @@ It is one offline HTML file. Everything personal stays on your machine and is gi
 "robust edge", "promising, not proven", "cuts drawdown at little cost" or "no reliable edge". Read `reports/validation.md`: most
 fancy strategies do not beat buy & hold after Indian tax once you look beyond one year, and the page says so.
 
+**Goals ("I need Rs X on date D"):** add them with `goal` in the shell (or `config/goals.yaml`, see `config/goals.example.yaml`). Every `check`/`site` run then (1) moves each goal's money to safe assets on a glide path (nothing forced beyond 5 years out, fully safe in the last year; a "nice" goal starts 3 years out), capping growth assets so the strategy cannot hold more risk than the goals allow, and (2) `python main.py goals` shows whether each goal is on track, survives a 35% fall, the monthly saving that closes any gap, and the cheapest units to sell on the date after LTCG/STCG, the yearly exemption, FIFO and charges. Ad hoc: `python main.py goals --amount 500000 --on 2028-06-30`. Assumptions live under `goals:` in `config/settings.yaml`. Code: `pe/goals.py`.
+
 ## Quick start
 
 ```bash

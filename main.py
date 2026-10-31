@@ -24,6 +24,7 @@ import pandas as pd
 from pe.config import ROOT, load_holdings, load_settings, register_assets, resolve_amount_lots
 from pe.data import build_prices, fetch_closes, synthetic_prices
 from pe.engine import make_plan
+from pe.goals import load_goals, outside_safe_value
 from pe.stopping import secretary_decision
 from pe.render import show_md
 from pe.tax import BUCKETS
@@ -126,8 +127,10 @@ def cmd_run(args):
     h = resolve_amount_lots(h, px)
     usd = float(fx.iloc[-1]) if fx is not None else None
     mem = guard_mem_load()
+    goals = load_goals()
     plan = make_plan(px.index[-1], h.lots, h.cash_inr, px, vix, settings, _fy_realised(h, prof),
-                     lrs_used=h.lrs_remitted_this_fy_inr, usd_inr=usd, guard_mem=mem)
+                     lrs_used=h.lrs_remitted_this_fy_inr, usd_inr=usd, guard_mem=mem,
+                     goals=goals, goal_safe_outside=outside_safe_value(px.index[-1].date()) if goals else 0.0)
     if not (args.demo or args.asof):
         guard_mem_save(mem)
     timing = timing_step(plan, px, settings) if not args.demo else []
@@ -143,6 +146,43 @@ def cmd_run(args):
     if settings["report"].get("telegram"):
         from pe.notify import telegram
         telegram(text[:3900])
+
+
+def cmd_goals(args):
+    """Goal status, and for each goal (or one ad hoc amount) the cheapest set of sales that raises it."""
+    from pe import goals as G
+    from pe.profile import apply_broker_rules
+    settings = load_settings()
+    prof, _ = _tax_setup(settings)
+    h = load_holdings(args.holdings)
+    register_assets(settings, h)
+    apply_broker_rules(settings, prof)
+    px, vix, fx, note = load_data(settings, args.demo, args.refresh)
+    h = resolve_amount_lots(h, px)
+    usd = float(fx.iloc[-1]) if fx is not None else None
+    today = px.index[-1].date()
+    goals = load_goals()
+    if args.amount:
+        due = date.fromisoformat(args.on) if args.on else today
+        goals = [G.Goal(args.name or "withdrawal", args.amount, due)]
+    if not goals:
+        print("No goals yet. Add one in the shell with `goal`, or run: python main.py goals --amount 500000 --on 2028-06-30")
+        return
+    pos_now = px.iloc[-1]
+    held = {}
+    for l in h.lots:
+        held[l.symbol] = held.get(l.symbol, 0.0) + l.qty * float(pos_now.get(l.symbol, l.price) if pd.notna(pos_now.get(l.symbol)) else l.price)
+    nav = sum(held.values()) + h.cash_inr
+    safe = sum(v for k, v in held.items() if G.is_goal_safe(k, settings)) + h.cash_inr
+    gp = G.assess(goals, today, nav, safe, outside_safe_value(today), settings)
+    text = [G.goals_markdown(gp)]
+    realised = _fy_realised(h, prof)
+    for g in sorted(goals, key=lambda x: x.due):
+        w = G.withdrawal_plan(g.amount_inr, h.lots, h.cash_inr, pos_now, today, settings, max(g.due, today), realised, usd)
+        text.append(G.withdrawal_markdown(w, g.name))
+    text.append(f"_Prices as of {today} ({note}) are held flat to the sale date. Units already sold for one goal are not removed before the next, "
+                f"so run one goal at a time if the amounts are large. Planning aid only; confirm tax with a CA._")
+    show_md("\n".join(text))
 
 
 def cmd_backtest(args):
@@ -199,8 +239,10 @@ def cmd_site(args):
     px, vix, fx, note = load_data(settings, args.demo, args.refresh)
     h = resolve_amount_lots(h, px)
     usd = float(fx.iloc[-1]) if fx is not None else None
+    goals = [] if example else load_goals()
     plan = make_plan(px.index[-1], h.lots, h.cash_inr, px, vix, settings, _fy_realised(h, prof), lrs_used=h.lrs_remitted_this_fy_inr, usd_inr=usd,
-                     guard_mem=dict(guard_mem_load()))
+                     guard_mem=dict(guard_mem_load()), goals=goals,
+                     goal_safe_outside=outside_safe_value(px.index[-1].date()) if goals else 0.0)
     timing = timing_step(plan, px, settings) if not (args.demo or example) else []
     start = px.index[-1] - timedelta(days=args.days)
     curves, table, logs = run_all(h.lots, px, vix, settings, start, fx)
@@ -376,6 +418,11 @@ def main():
     fp = sub.add_parser("forecast", help="test valuation (P/E, earnings yield vs bonds) and forecast overlays against the strategies (slow, needs network)")
     fp.add_argument("--years", type=int, default=10)
     fp.add_argument("--refresh", action="store_true")
+    gl = sub.add_parser("goals", help="money you need on a date: glide path to safe assets and the cheapest units to sell")
+    gl.add_argument("--amount", type=float, help="ad hoc: rupees needed (instead of config/goals.yaml)")
+    gl.add_argument("--on", help="ad hoc: date needed, YYYY-MM-DD")
+    gl.add_argument("--name"); gl.add_argument("--holdings")
+    gl.add_argument("--demo", action="store_true"); gl.add_argument("--refresh", action="store_true")
     sub.add_parser("switch", help="test an automatic strategy switcher against fixed strategies (needs simulate-daily --all-strategies first)")
     sub.add_parser("compare", help="compare metals, semiconductors and other assets in India and abroad, after cost and tax")
     sub.add_parser("shell", help="guided interactive shell with autocomplete: profile, imports, check, site")
@@ -407,6 +454,8 @@ def main():
             webbrowser.open(out.as_uri())
     elif args.cmd == "validate":
         cmd_validate(args)
+    elif args.cmd == "goals":
+        cmd_goals(args)
     elif args.cmd == "simulate-daily":
         from pe import daily_sim
         yrs = tuple(int(x) for x in args.years.split(","))

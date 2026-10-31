@@ -50,6 +50,7 @@ class Plan:
     tax_after: float
     usd_inr: float | None = None
     ta: dict = field(default_factory=dict)
+    goals: object = None          # pe.goals.GoalPlan when goals are configured
 
 
 def _d(ts) -> date:
@@ -128,7 +129,8 @@ def _pick_lots(lots: list[Lot], qty: float, price: float, tax_class: str, today:
 
 def make_plan(today_ts, lots: list[Lot], cash_inr: float, px_hist: pd.DataFrame, vix: pd.Series | None,
               settings: Settings, fy_realised: dict | None = None, policy: str | None = None,
-              harvest: bool = True, lrs_used: float = 0.0, usd_inr: float | None = None, guard_level: int | None = None, guard_mem: dict | None = None) -> Plan:
+              harvest: bool = True, lrs_used: float = 0.0, usd_inr: float | None = None, guard_level: int | None = None, guard_mem: dict | None = None,
+              goals: list | None = None, goal_safe_outside: float = 0.0) -> Plan:
     """policy=None is the live path: it uses the configured policy and adds the crash guard when strategy.crash.enabled.
     Backtests pass explicit policies, so their results only include the guard where a variant asks for `+guard`."""
     today = _d(today_ts)
@@ -149,12 +151,21 @@ def make_plan(today_ts, lots: list[Lot], cash_inr: float, px_hist: pd.DataFrame,
     if cash_inr > 0 and nav > 0 and policy.endswith("+guard"):
         held_w["CASH"] = held_w.get("CASH", 0.0) + cash_inr / nav
     target = build_target(px_hist, vix, settings, policy, held_w, guard_level, guard_mem)
+    goal_plan = None
+    if goals and nav > 0:
+        from . import goals as G
+        safe_val = sum(v for k, v in held.items() if G.is_goal_safe(k, settings)) + cash_inr
+        goal_plan = G.assess(goals, today, nav, safe_val, goal_safe_outside, settings)
+        if goal_plan.statuses:
+            G.cap_target(target, held, cash_inr, nav, goal_plan, settings)
     ta = analyse_all(px_hist, list(held) + list((target.weights or {}).keys()))
     alpha = _alpha(px_hist, settings)
     vol6 = px_hist.pct_change().iloc[-126:].std() * np.sqrt(252)
 
     trades: list[Trade] = []
     deferred, blocked, notes = [], [], []
+    if goal_plan:
+        notes.extend(goal_plan.notes)
     by_sym: dict[str, list[Lot]] = {}
     for l in lots:
         by_sym.setdefault(l.symbol, []).append(l)
@@ -355,4 +366,4 @@ def make_plan(today_ts, lots: list[Lot], cash_inr: float, px_hist: pd.DataFrame,
         notes.append(f"Financial year ends {fy_end(today)}: last chance to use this FY's LTCG exemption and harvest losses.")
 
     tax_after = compute_tax(running, settings).tax
-    return Plan(today, nav, pos, target, trades, deferred, blocked, notes, running, tax_before, tax_after, usd_inr, ta)
+    return Plan(today, nav, pos, target, trades, deferred, blocked, notes, running, tax_before, tax_after, usd_inr, ta, goal_plan)
