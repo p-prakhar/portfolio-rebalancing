@@ -36,6 +36,7 @@ COMMANDS = {
     "import-etrade": "load RSU/ESPP vests from an E*TRADE export",
     "add-lot": "type in one purchase by hand",
     "add-fd": "add a fixed deposit (SBI, IDFC FIRST or any bank)",
+    "fd-rates": "today's FD rates at SBI, IDFC FIRST, other banks and small finance banks",
     "fds": "your FDs: value today, after-tax yield, cost of breaking early",
     "import-mf": "load all your mutual funds from a CAS statement PDF",
     "add-mf": "add one mutual fund purchase by hand",
@@ -63,7 +64,7 @@ GROUPS = [
     ("Start here", ["next", "setup", "status", "where"]),
     ("About you", ["profile", "income"]),
     ("Load what you own", ["import-kite", "import-etrade", "import-mf", "add-fd", "add-mf", "add-lot", "add-other", "actions"]),
-    ("See your savings", ["fds", "mf"]),
+    ("See your savings", ["fds", "fd-rates", "mf"]),
     ("Decide", ["site", "check", "crash"]),
     ("Research (slower)", ["backtest", "validate", "simulate", "compare", "crash-test", "timing", "switch", "forecast", "gold", "silver"]),
     ("Shell", ["help", "quit"]),
@@ -588,6 +589,9 @@ def dispatch(cmd: str) -> bool:
         M.cmd_compare(None)
     elif cmd in ("simulate", "timing", "switch", "forecast"):
         sys.argv = ["main.py"] + ({"simulate": ["simulate-daily", "--all-strategies"]}.get(cmd) or [cmd])
+        M.main()
+    elif cmd == "fd-rates":
+        sys.argv = ["main.py", "fd-rates"]
         M.main()
     elif cmd == "silver":
         sys.argv = ["main.py", "gold-prices", "--metal", "silver"]

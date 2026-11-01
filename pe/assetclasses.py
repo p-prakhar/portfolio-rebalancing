@@ -18,7 +18,11 @@ from .realassets import Result, irr
 
 
 def load(path=None) -> dict:
-    return yaml.safe_load(open(path or ROOT / "config" / "asset_classes.yaml"))
+    spec = yaml.safe_load(open(path or ROOT / "config" / "asset_classes.yaml"))
+    if path is None:      # use the latest fetched bank FD rates (cache only: no network here) for the FD classes
+        from . import fdrates
+        fdrates.apply_to_classes(spec)
+    return spec
 
 
 def _val(x, scen: dict, name: str):

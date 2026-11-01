@@ -110,6 +110,15 @@ def save(fds: list[FD]) -> None:
     PATH.write_text("# Fixed deposits (git-ignored). Edit here or via the shell's add-fd.\n" + yaml.safe_dump({"fds": rows}, sort_keys=False))
 
 
+def _card(f: FD, today: date) -> float | None:
+    """The bank's current card rate for the period this FD was actually held, if we have fetched or cached one."""
+    try:
+        from . import fdrates
+        return fdrates.card_rate_for_period(f.bank, (today - f.start).days)
+    except Exception:
+        return None
+
+
 def summary(fds: list[FD], slab: float, cess: float = 0.04, today: date | None = None) -> list[dict]:
     today = today or date.today()
     fy0 = date(today.year if today.month >= 4 else today.year - 1, 4, 1)
@@ -123,7 +132,7 @@ def summary(fds: list[FD], slab: float, cess: float = 0.04, today: date | None =
         threshold = 100000 if f.senior else 50000
         out.append({"label": f.label or f"{BANKS.get(f.bank, BANKS['other'])['name']} FD", "bank": BANKS.get(f.bank, BANKS["other"])["name"],
                     "principal": f.principal, "rate": f.rate, "start": str(f.start), "maturity": str(f.maturity), "days_left": (f.maturity - today).days,
-                    "value_today": f.value_on(today), "break_value_today": f.break_value(today), "penalty_rate": f.penalty_rate(),
+                    "value_today": f.value_on(today), "break_value_today": f.break_value(today, _card(f, today)), "penalty_rate": f.penalty_rate(),
                     "effective_yield": yearly, "after_tax_yield": yearly * (1 - eff), "interest_this_fy": f.interest_in_fy(fy0),
                     "tax_this_fy": f.interest_in_fy(fy0) * eff, "tds_likely": per_bank[f.bank] > threshold,
                     "bank_interest_this_fy": per_bank[f.bank], "penalty_note": BANKS.get(f.bank, BANKS["other"])["penalty_note"]})
