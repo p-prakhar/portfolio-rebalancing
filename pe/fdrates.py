@@ -84,7 +84,23 @@ def parse_rates(html: str) -> list[dict]:
                 i = j
                 continue
         i += 1
-    return rows
+    return _main_table(rows)
+
+
+def _main_table(rows: list[dict]) -> list[dict]:
+    """Pages often carry several tables (special, bulk or limited-offer cards besides the regular one). Tenures rise
+    down a table and restart at the next, so split there and keep the first table that is nearly as long as the longest
+    (the regular card comes before bulk-deposit cards, and a short or mangled fragment must not win)."""
+    runs, cur = [], []
+    for r in rows:
+        if cur and r["lo"] < cur[-1]["lo"]:
+            runs.append(cur)
+            cur = []
+        cur.append(r)
+    if cur:
+        runs.append(cur)
+    top = max((len(r) for r in runs), default=0)
+    return next((r for r in runs if len(r) >= 0.8 * top), [])
 
 
 def _sane(rows: list[dict]) -> bool:

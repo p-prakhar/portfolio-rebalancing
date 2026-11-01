@@ -1,3 +1,4 @@
+import pytest
 """FD rate parsing, fallbacks and wiring. Synthetic pages only; no network."""
 from datetime import date
 
@@ -81,3 +82,13 @@ def test_ranking_and_render_flag_sfb(tmp_path, monkeypatch):
     rk = F.ranking(banks, 12)
     assert rk[0]["bank"] == "S" and rk[0]["dicgc"]
     assert "Rs 5 lakh" in F.render(banks, 12)
+
+
+def test_parse_keeps_regular_card_over_special_offer_table():
+    def table(rows):
+        return "<table>" + "".join(f"<tr><td>{t}</td><td>{r}%</td></tr>" for t, r in rows) + "</table>"
+    html = (table([("1 Year to less than 2 years", 7.9), ("2 Years", 8.1), ("3 Years", 7.5)])
+            + table([("7 days to 45 days", 3.5), ("46 days to 179 days", 4.5), ("180 days to 364 days", 6.0),
+                     ("1 Year to less than 2 years", 7.2), ("2 Years to 3 Years", 7.0)]))
+    rows = F.parse_rates(html)
+    assert len(rows) == 5 and F.rate_for(rows, 12) == pytest.approx(0.072)
