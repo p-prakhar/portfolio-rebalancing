@@ -386,6 +386,10 @@ def main():
     ip.add_argument("--usd-inr", type=float, help="FX for USD rows without their own rate")
     ra = sub.add_parser("real-assets", help="compare every asset class (equity, global, debt, small savings, REITs, property, farmland, gold, crypto...) after all costs and tax")
     ra.add_argument("--city-premium", type=float, default=0.0, help="gold price premium of your buying city vs reference, e.g. 0.01")
+    fr = sub.add_parser("fd-rates", help="current FD card rates across banks (live fetch, cache, manual fallback)")
+    fr.add_argument("--months", type=float, default=12, help="deposit tenure to rank, e.g. 12 or 24")
+    fr.add_argument("--senior", action="store_true")
+    fr.add_argument("--offline", action="store_true", help="skip the fetch; use cache or the manual card")
     gp = sub.add_parser("gold-prices", help="fetch city-wise gold rates (Bangalore, Raipur, ...)")
     gp.add_argument("--manual", help="e.g. bangalore=14800,raipur=14213 if scraping fails")
     gp.add_argument("--home", default="bangalore")
@@ -463,6 +467,9 @@ def main():
         p = save(text, load_settings(), "real_assets.md")
         show_md(text)
         print(f"\nSaved {p}")
+    elif args.cmd == "fd-rates":
+        from pe import fdrates
+        print(fdrates.render(fdrates.current(refresh=not args.offline), args.months, args.senior))
     elif args.cmd == "gold-prices":
         from pe import goldprice, realassets
         from pe.report import save

@@ -1,0 +1,41 @@
+# Where to fetch FD card rates, plus a manual card used when a fetch fails and nothing is cached.
+# The manual slabs are ROUGH ILLUSTRATIVE numbers, not quotes: [from_days, to_days, general %, senior %].
+# Update them (and as_of) when you check a bank's site. Page URLs move; fix `url` here if a fetch starts failing.
+# kind: large | sfb (small finance bank, DICGC cover only Rs 5 lakh per bank incl. interest).
+banks:
+  sbi:
+    name: SBI
+    kind: large
+    url: https://sbi.co.in/web/interest-rates/deposit-rates/retail-domestic-term-deposits
+    as_of: 2026-10-01
+    slabs: [[7, 45, 3.0], [46, 179, 4.5], [180, 210, 5.5], [211, 364, 5.75], [365, 729, 6.5], [730, 1094, 6.4], [1095, 1825, 6.3]]
+  idfc_first:
+    name: IDFC FIRST Bank
+    kind: large
+    url: https://www.idfcfirstbank.com/personal-banking/deposits/fixed-deposit
+    as_of: 2026-10-01
+    slabs: [[7, 14, 3.0], [15, 180, 4.5], [181, 364, 6.5], [365, 729, 6.8], [730, 1094, 7.0], [1095, 1825, 6.5]]
+  hdfc:
+    name: HDFC Bank
+    kind: large
+    url: https://www.hdfcbank.com/personal/save/deposits/fixed-deposit-interest-rate
+    as_of: 2026-10-01
+    slabs: [[7, 45, 3.0], [46, 179, 4.5], [180, 364, 5.75], [365, 729, 6.6], [730, 1094, 6.6], [1095, 1825, 6.4]]
+  icici:
+    name: ICICI Bank
+    kind: large
+    url: https://www.icicibank.com/personal-banking/deposits/fixed-deposit/fd-interest-rates
+    as_of: 2026-10-01
+    slabs: [[7, 45, 3.0], [46, 184, 4.5], [185, 364, 5.75], [365, 729, 6.6], [730, 1094, 6.6], [1095, 1825, 6.5]]
+  ujjivan_sfb:
+    name: Ujjivan Small Finance Bank
+    kind: sfb
+    url: https://www.ujjivansfb.in/personal-banking/deposits/fixed-deposit
+    as_of: 2026-10-01
+    slabs: [[7, 45, 3.5], [46, 180, 4.75], [181, 364, 6.75], [365, 729, 7.8], [730, 1094, 7.5], [1095, 1825, 7.2]]
+  equitas_sfb:
+    name: Equitas Small Finance Bank
+    kind: sfb
+    url: https://www.equitasbank.com/fixed-deposit-interest-rates
+    as_of: 2026-10-01
+    slabs: [[7, 45, 3.5], [46, 180, 4.75], [181, 364, 6.75], [365, 729, 7.5], [730, 1094, 7.5], [1095, 1825, 7.0]]
