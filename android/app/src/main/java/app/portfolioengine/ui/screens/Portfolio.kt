@@ -132,7 +132,7 @@ fun PortfolioTab(vm: MainViewModel, state: UiState, go: (String) -> Unit) {
                     }
                 }
             }
-            Spacer(Modifier.height(96.dp))
+            Spacer(Modifier.height(120.dp))
         }
         ExtendedFloatingActionButton(
             onClick = { adding = true }, icon = { Icon(Icons.Filled.Add, contentDescription = null) }, text = { Text("Add") },
