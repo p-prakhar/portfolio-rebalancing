@@ -1093,7 +1093,7 @@ _PAGE = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport
 body{background:var(--bg);color:var(--fg);font:16px/1.55 system-ui,sans-serif;margin:0;padding:16px;overflow-wrap:anywhere}
 h1{font-size:22px;line-height:1.25}h2{font-size:18px;margin-top:28px}h3{font-size:16px;margin-top:22px}
 .tw{overflow-x:auto;margin:12px 0;border:1px solid var(--line);border-radius:12px;background:var(--card)}
-table{border-collapse:collapse;font-size:14px;min-width:100%}th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+table{border-collapse:collapse;font-size:14px;min-width:100%}th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top;overflow-wrap:normal}td:first-child{min-width:9em}
 th{color:var(--mut);font-weight:600;white-space:nowrap}tr:last-child td{border-bottom:0}code{font-size:.9em}li{margin:4px 0}
 blockquote{margin:12px 0;padding:4px 14px;border-left:3px solid var(--line);color:var(--mut)}
 </style></head><body>__BODY__</body></html>"""
