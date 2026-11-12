@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -24,6 +26,17 @@ val syncEngine by tasks.registering(Sync::class) {
     }
 }
 
+// Release key lives outside the repo. Path: -PkeystoreProperties=... or $PE_KEYSTORE_PROPERTIES, default ~/pe-android-signing/keystore.properties.
+// When the file is missing the release build falls back to the debug key, so the project still builds for anyone.
+val keystorePropsFile = File(
+    providers.gradleProperty("keystoreProperties").orNull
+        ?: System.getenv("PE_KEYSTORE_PROPERTIES")
+        ?: "${System.getProperty("user.home")}/pe-android-signing/keystore.properties"
+)
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.isFile) keystorePropsFile.inputStream().use { load(it) }
+}
+
 android {
     namespace = "app.portfolioengine"
     compileSdk = 36
@@ -32,8 +45,8 @@ android {
         applicationId = "app.portfolioengine"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.0-beta2"
         ndk {
             // arm64 for phones, x86_64 for the emulator. -Pabi=arm64-v8a builds a phone-only (smaller) APK.
             abiFilters += (providers.gradleProperty("abi").orNull?.split(",") ?: listOf("arm64-v8a", "x86_64"))
@@ -41,13 +54,27 @@ android {
         vectorDrawables { useSupportLibrary = true }
     }
 
+    signingConfigs {
+        if (keystoreProps.containsKey("storeFile")) {
+            create("release") {
+                storeFile = File(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Signed with the debug key unless keystore.properties provides a release key (kept out of git).
-            signingConfig = signingConfigs.getByName("debug")
+            // R8 has not been tested against Chaquopy yet, so no shrinking for now.
+            isMinifyEnabled = false
+            isShrinkResources = false
+            isDebuggable = false
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
     compileOptions {
