@@ -43,6 +43,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import app.portfolioengine.MainViewModel
+import app.portfolioengine.ui.components.AppButton
 import app.portfolioengine.ui.components.Muted
 import app.portfolioengine.ui.screens.AddHoldingScreen
 import app.portfolioengine.ui.screens.DepositsScreen
@@ -121,7 +122,7 @@ private fun BootFailed(message: String, retry: () -> Unit) {
         Spacer(Modifier.height(8.dp))
         Muted(message)
         Spacer(Modifier.height(20.dp))
-        Button(onClick = retry) { Text("Try again") }
+        AppButton(onClick = retry) { Text("Try again") }
     }
 }
 

@@ -40,6 +40,8 @@ import app.portfolioengine.model.Fmt
 import app.portfolioengine.model.bool
 import app.portfolioengine.model.objects
 import app.portfolioengine.model.str
+import app.portfolioengine.ui.components.AppButton
+import app.portfolioengine.ui.components.AppTextButton
 import app.portfolioengine.ui.components.AmountField
 import app.portfolioengine.ui.components.AppCard
 import app.portfolioengine.ui.components.ChoiceRow
@@ -114,7 +116,7 @@ fun AddHoldingScreen(vm: MainViewModel, fund: Boolean, onBack: () -> Unit) {
                 }
                 if (!fund && query.trim().length >= 2 && !searching) {
                     Spacer(Modifier.height(8.dp))
-                    TextButton(onClick = { picked = JSONObject().put("symbol", query.trim().uppercase()).put("name", query.trim().uppercase()).put("currency", "INR").put("where", "NSE") }) {
+                    AppTextButton(onClick = { picked = JSONObject().put("symbol", query.trim().uppercase()).put("name", query.trim().uppercase()).put("currency", "INR").put("where", "NSE") }) {
                         Text("Use ${query.trim().uppercase()} as an NSE symbol")
                     }
                 }
@@ -130,7 +132,7 @@ fun AddHoldingScreen(vm: MainViewModel, fund: Boolean, onBack: () -> Unit) {
                             Text(if (fund) p.str("name") else p.str("symbol"), style = MaterialTheme.typography.titleMedium)
                             if (!fund) Muted(p.str("name") + " · " + p.str("where"))
                         }
-                        TextButton(onClick = {
+                        AppTextButton(onClick = {
                             picked = null
                             error = null
                         }) { Text("Change") }
@@ -160,7 +162,7 @@ fun AddHoldingScreen(vm: MainViewModel, fund: Boolean, onBack: () -> Unit) {
                 val px = price.toDoubleOrNull()
                 val amt = Fmt.parseAmount(amount)
                 val ready = if (mode == "units") q != null && q > 0 && px != null && px > 0 else amt != null && amt > 0
-                Button(enabled = ready && !busy, modifier = Modifier.fillMaxWidth(), onClick = {
+                AppButton(enabled = ready && !busy, modifier = Modifier.fillMaxWidth(), onClick = {
                     busy = true
                     error = null
                     val o = JSONObject().put("buy_date", date)

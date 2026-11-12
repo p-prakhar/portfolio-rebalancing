@@ -37,6 +37,7 @@ import app.portfolioengine.model.objects
 import app.portfolioengine.model.str
 import app.portfolioengine.model.strings
 import app.portfolioengine.ui.components.AppCard
+import app.portfolioengine.ui.components.AppTextButton
 import app.portfolioengine.ui.components.Bullets
 import app.portfolioengine.ui.components.BusyLine
 import app.portfolioengine.ui.components.DateField
@@ -175,7 +176,7 @@ private fun TradeCard(t: JSONObject, onDone: () -> Unit) {
             }
         }
         if (t.str("symbol") != "CASH") {
-            TextButton(onClick = onDone, modifier = Modifier.align(Alignment.End)) { Text("I placed this") }
+            AppTextButton(onClick = onDone, modifier = Modifier.align(Alignment.End)) { Text("I placed this") }
         }
     }
 }
@@ -207,7 +208,7 @@ private fun MarkDoneDialog(t: JSONObject, onDismiss: () -> Unit, onSave: (Double
                 DateField("Date", date, { date = it })
             }
         },
-        confirmButton = { TextButton(enabled = q != null && q > 0 && p != null && p > 0, onClick = { onSave(q!!, p!!, date) }) { Text("Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { AppTextButton(enabled = q != null && q > 0 && p != null && p > 0, onClick = { onSave(q!!, p!!, date) }) { Text("Save") } },
+        dismissButton = { AppTextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }

@@ -53,6 +53,7 @@ import app.portfolioengine.model.objects
 import app.portfolioengine.model.str
 import app.portfolioengine.ui.Routes
 import app.portfolioengine.ui.components.AmountField
+import app.portfolioengine.ui.components.AppTextButton
 import app.portfolioengine.ui.components.AppCard
 import app.portfolioengine.ui.components.DateField
 import app.portfolioengine.ui.components.Disclosure
@@ -166,12 +167,12 @@ fun PortfolioTab(vm: MainViewModel, state: UiState, go: (String) -> Unit) {
             title = { Text("Remove this lot?") },
             text = { Text("${lot.str("symbol")} bought ${prettyDate(lot.str("buy_date"))}. Use this to fix a mistake. If you sold it, record the sale from the Plan tab instead so the gain is counted.") },
             confirmButton = {
-                TextButton(onClick = {
+                AppTextButton(onClick = {
                     vm.mutate("delete_lot", lot.int("index"))
                     deleteLot = null
                 }) { Text("Remove") }
             },
-            dismissButton = { TextButton(onClick = { deleteLot = null }) { Text("Cancel") } },
+            dismissButton = { AppTextButton(onClick = { deleteLot = null }) { Text("Cancel") } },
         )
     }
     if (editCash) {
@@ -181,12 +182,12 @@ fun PortfolioTab(vm: MainViewModel, state: UiState, go: (String) -> Unit) {
             title = { Text("Cash ready to invest") },
             text = { AmountField(cash, { cash = it }, "Amount", help = "Money in the broker or bank that this portfolio can use") },
             confirmButton = {
-                TextButton(enabled = Fmt.parseAmount(cash) != null, onClick = {
+                AppTextButton(enabled = Fmt.parseAmount(cash) != null, onClick = {
                     vm.mutate("set_account", jsonOf("cash_inr" to Fmt.parseAmount(cash)))
                     editCash = false
                 }) { Text("Save") }
             },
-            dismissButton = { TextButton(onClick = { editCash = false }) { Text("Cancel") } },
+            dismissButton = { AppTextButton(onClick = { editCash = false }) { Text("Cancel") } },
         )
     }
 }
@@ -273,13 +274,13 @@ private fun LotDialog(lot: JSONObject, onDismiss: () -> Unit, onSave: (String) -
             }
         },
         confirmButton = {
-            TextButton(enabled = valid, onClick = {
+            AppTextButton(enabled = valid, onClick = {
                 onSave(
                     if (qty.isNotBlank() && price.isNotBlank()) jsonOf("symbol" to lot.str("symbol"), "buy_date" to date, "qty" to qty.toDouble(), "price" to price.toDouble())
                     else jsonOf("symbol" to lot.str("symbol"), "buy_date" to date, "amount_inr" to Fmt.parseAmount(amount)),
                 )
             }) { Text("Save") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { AppTextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }

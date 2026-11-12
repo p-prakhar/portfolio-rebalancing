@@ -50,6 +50,7 @@ import app.portfolioengine.model.objects
 import app.portfolioengine.model.str
 import app.portfolioengine.ui.Routes
 import app.portfolioengine.ui.components.AppCard
+import app.portfolioengine.ui.components.AppTextButton
 import app.portfolioengine.ui.components.Disclosure
 import app.portfolioengine.ui.components.Muted
 import app.portfolioengine.ui.components.SectionTitle
@@ -126,12 +127,12 @@ fun MoreTab(vm: MainViewModel, state: UiState, go: (String) -> Unit) {
             title = { Text("Start over?") },
             text = { Text("This removes every holding from the app. Save a backup first if you may want them back.") },
             confirmButton = {
-                TextButton(onClick = {
+                AppTextButton(onClick = {
                     confirmReset = false
                     vm.mutate("clear_holdings")
                 }) { Text("Remove holdings") }
             },
-            dismissButton = { TextButton(onClick = { confirmReset = false }) { Text("Cancel") } },
+            dismissButton = { AppTextButton(onClick = { confirmReset = false }) { Text("Cancel") } },
         )
     }
 }

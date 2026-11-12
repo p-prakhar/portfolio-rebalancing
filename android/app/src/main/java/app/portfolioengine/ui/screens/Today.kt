@@ -36,6 +36,7 @@ import app.portfolioengine.model.objects
 import app.portfolioengine.model.str
 import app.portfolioengine.model.strings
 import app.portfolioengine.ui.Routes
+import app.portfolioengine.ui.components.AppButton
 import app.portfolioengine.ui.components.AllocationBar
 import app.portfolioengine.ui.components.AppCard
 import app.portfolioengine.ui.components.Bullets
@@ -189,7 +190,7 @@ private fun Verdict(d: JSONObject, openPlan: () -> Unit) {
         if (n > 0) {
             Spacer(Modifier.height(16.dp))
             if (rebalance) {
-                Button(onClick = openPlan, modifier = Modifier.fillMaxWidth()) { Text("See the $n step${if (n == 1) "" else "s"}") }
+                AppButton(onClick = openPlan, modifier = Modifier.fillMaxWidth()) { Text("See the $n step${if (n == 1) "" else "s"}") }
             } else {
                 OutlinedButton(onClick = openPlan, modifier = Modifier.fillMaxWidth()) { Text("See what was considered") }
             }

@@ -45,6 +45,8 @@ import app.portfolioengine.model.num
 import app.portfolioengine.model.objects
 import app.portfolioengine.model.str
 import app.portfolioengine.model.strings
+import app.portfolioengine.ui.components.AppButton
+import app.portfolioengine.ui.components.AppTextButton
 import app.portfolioengine.ui.components.AppCard
 import app.portfolioengine.ui.components.Bullets
 import app.portfolioengine.ui.components.ChoiceRow
@@ -92,7 +94,7 @@ fun ImportScreen(vm: MainViewModel, typed: Boolean, onBack: () -> Unit) {
                     Muted(s.message)
                     Spacer(Modifier.height(20.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Button(onClick = { vm.importReset() }) { Text(if (typed) "Edit the list" else "Pick another file") }
+                        AppButton(onClick = { vm.importReset() }) { Text(if (typed) "Edit the list" else "Pick another file") }
                         OutlinedButton(onClick = leave) { Text("Close") }
                     }
                     if (!typed) {
@@ -107,7 +109,7 @@ fun ImportScreen(vm: MainViewModel, typed: Boolean, onBack: () -> Unit) {
                     Muted("${s.lots} lot${if (s.lots == 1) "" else "s"} saved. The check is running again with the new holdings.")
                     Spacer(Modifier.height(20.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Button(onClick = leave) { Text("Done") }
+                        AppButton(onClick = leave) { Text("Done") }
                         if (!typed) OutlinedButton(onClick = {
                             vm.importReset()
                             picker.launch(IMPORT_MIME)
@@ -125,7 +127,7 @@ private fun PickFiles(pick: () -> Unit) {
     Spacer(Modifier.height(8.dp))
     Muted("Pick one file, or several of the same kind (for example a tradebook for each year). The app works out what it is and shows you what it found before anything is saved.")
     Spacer(Modifier.height(16.dp))
-    Button(onClick = pick, modifier = Modifier.fillMaxWidth()) { Text("Choose files") }
+    AppButton(onClick = pick, modifier = Modifier.fillMaxWidth()) { Text("Choose files") }
     SectionTitle("Where do I find my files?")
     AppCard { FileGuides() }
     Spacer(Modifier.height(12.dp))
@@ -145,7 +147,7 @@ private fun TypedEntry(vm: MainViewModel) {
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false),
     )
     Spacer(Modifier.height(12.dp))
-    Button(enabled = text.isNotBlank(), onClick = { vm.importTyped(text) }, modifier = Modifier.fillMaxWidth()) { Text("Review") }
+    AppButton(enabled = text.isNotBlank(), onClick = { vm.importTyped(text) }, modifier = Modifier.fillMaxWidth()) { Text("Review") }
     Spacer(Modifier.height(12.dp))
     Muted("Use the exchange symbol (TCS, NIFTYBEES). Lines without a date use today. Add $ after a US price to convert from dollars.")
 }
@@ -187,7 +189,7 @@ private fun NeedsForm(s: ImportState.Needs, vm: MainViewModel) {
     }
     Spacer(Modifier.height(16.dp))
     val ready = ("password" !in s.needs || password.isNotEmpty()) && ("ticker" !in s.needs || ticker.isNotEmpty()) && ("usd_inr" !in s.needs || (rate.toDoubleOrNull() ?: 0.0) > 0)
-    Button(enabled = ready, modifier = Modifier.fillMaxWidth(), onClick = {
+    AppButton(enabled = ready, modifier = Modifier.fillMaxWidth(), onClick = {
         vm.importAnswer(
             buildMap {
                 if ("password" in s.needs) put("password", password)
@@ -241,13 +243,13 @@ private fun PreviewView(d: JSONObject, vm: MainViewModel) {
         replaceAll -> Muted("This replaces everything in the app with the contents of the file. A copy of the current holdings is kept as a backup file inside the app.")
         replaces.isNotEmpty() -> {
             Muted("You already hold ${replaces.joinToString(", ")}. Their existing lots are replaced so nothing is counted twice.")
-            TextButton(onClick = { append = !append }) { Text(if (append) "Adding on top instead. Tap to replace." else "Add on top of the existing lots instead") }
+            AppTextButton(onClick = { append = !append }) { Text(if (append) "Adding on top instead. Tap to replace." else "Add on top of the existing lots instead") }
         }
         else -> {}
     }
     Spacer(Modifier.height(12.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Button(onClick = { vm.importCommit(if (append) "append" else "replace_symbols") }, modifier = Modifier.weight(1f)) { Text(if (replaceAll) "Replace and import" else "Import") }
+        AppButton(onClick = { vm.importCommit(if (append) "append" else "replace_symbols") }, modifier = Modifier.weight(1f)) { Text(if (replaceAll) "Replace and import" else "Import") }
         OutlinedButton(onClick = { vm.importReset() }) { Text("Cancel") }
     }
 }

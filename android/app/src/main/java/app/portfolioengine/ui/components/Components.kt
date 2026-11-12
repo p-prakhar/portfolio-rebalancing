@@ -32,11 +32,13 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -178,7 +180,13 @@ fun Bullets(lines: List<String>, modifier: Modifier = Modifier) {
 fun <T> ChoiceRow(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
     FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         for ((value, label) in options) {
-            FilterChip(selected = value == selected, onClick = { onSelect(value) }, label = { Text(label) })
+            FilterChip(
+                selected = value == selected, onClick = { onSelect(value) }, label = { Text(label) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                ),
+            )
         }
     }
 }
@@ -244,12 +252,12 @@ fun DateField(label: String, iso: String, onChange: (String) -> Unit, modifier: 
         DatePickerDialog(
             onDismissRequest = { open = false },
             confirmButton = {
-                TextButton(onClick = {
+                AppTextButton(onClick = {
                     state.selectedDateMillis?.let { onChange(Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate().toString()) }
                     open = false
                 }) { Text("OK") }
             },
-            dismissButton = { TextButton(onClick = { open = false }) { Text("Cancel") } },
+            dismissButton = { AppTextButton(onClick = { open = false }) { Text("Cancel") } },
         ) { DatePicker(state = state) }
     }
 }
@@ -308,7 +316,7 @@ fun EmptyState(title: String, body: String, modifier: Modifier = Modifier, actio
         Muted(body)
         if (action != null && onAction != null) {
             Spacer(Modifier.height(20.dp))
-            Button(onClick = onAction) { Text(action) }
+            AppButton(onClick = onAction) { Text(action) }
         }
     }
 }
@@ -343,7 +351,7 @@ fun ActionBar(label: String, enabled: Boolean = true, error: String? = null, onC
     Surface(color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 16.dp, vertical = 10.dp)) {
             if (error != null) Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 8.dp))
-            Button(onClick = onClick, enabled = enabled, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text(label) }
+            AppButton(onClick = onClick, enabled = enabled, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text(label) }
         }
     }
 }
@@ -359,4 +367,27 @@ fun sleeveLabel(sleeve: String): String = when (sleeve) {
     "semis" -> "Semiconductors"
     "debt" -> "Debt"
     else -> sleeve.replace('_', ' ').replaceFirstChar { it.uppercase() }
+}
+
+/** Button whose disabled state stays readable on both themes (the Material default is grey on grey in dark mode). */
+@Composable
+fun AppButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable RowScope.() -> Unit) {
+    Button(
+        onClick = onClick, modifier = modifier, enabled = enabled,
+        colors = ButtonDefaults.buttonColors(
+            disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        ),
+        content = content,
+    )
+}
+
+/** Dialog text button whose disabled state stays readable on both themes. */
+@Composable
+fun AppTextButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable RowScope.() -> Unit) {
+    TextButton(
+        onClick = onClick, modifier = modifier, enabled = enabled,
+        colors = ButtonDefaults.textButtonColors(disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)),
+        content = content,
+    )
 }

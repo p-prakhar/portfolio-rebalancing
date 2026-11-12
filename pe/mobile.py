@@ -1114,6 +1114,7 @@ def md_to_html(md: str) -> str:
         t = re.sub(r"`([^`]+)`", r"<code>\1</code>", t)
         t = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", t)
         t = re.sub(r"(?<![*\w])\*([^*\n]+)\*(?![*\w])", r"<i>\1</i>", t)
+        t = re.sub(r"(?<![_\w])_([^\n]+?)_(?![_\w])", r"<i>\1</i>", t)
         return re.sub(r"\[([^\]]+)\]\((https?://[^)]+)\)", r'<a href="\2">\1</a>', t)
 
     out, lines, i = [], md.splitlines(), 0

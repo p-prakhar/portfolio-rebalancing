@@ -35,6 +35,8 @@ import app.portfolioengine.model.jsonOf
 import app.portfolioengine.model.num
 import app.portfolioengine.model.objects
 import app.portfolioengine.model.str
+import app.portfolioengine.ui.components.AppButton
+import app.portfolioengine.ui.components.AppTextButton
 import app.portfolioengine.ui.components.AmountField
 import app.portfolioengine.ui.components.AppCard
 import app.portfolioengine.ui.components.ChoiceRow
@@ -100,15 +102,15 @@ fun DepositsScreen(vm: MainViewModel, onBack: () -> Unit) {
                                     d.str("penalty_note"),
                             )
                             Row {
-                                TextButton(onClick = { editing = d }) { Text("Edit") }
-                                TextButton(onClick = { removing = d }) { Text("Remove") }
+                                AppTextButton(onClick = { editing = d }) { Text("Edit") }
+                                AppTextButton(onClick = { removing = d }) { Text("Remove") }
                             }
                         }
                     }
                 }
             }
             Spacer(Modifier.height(16.dp))
-            Button(onClick = { adding = true }, modifier = Modifier.fillMaxWidth()) { Text("Add a deposit") }
+            AppButton(onClick = { adding = true }, modifier = Modifier.fillMaxWidth()) { Text("Add a deposit") }
             Spacer(Modifier.height(32.dp))
         }
     }
@@ -118,12 +120,12 @@ fun DepositsScreen(vm: MainViewModel, onBack: () -> Unit) {
             title = { Text("Remove ${d.str("label")}?") },
             text = { Text("This only removes it from the app. Nothing happens at the bank.") },
             confirmButton = {
-                TextButton(onClick = {
+                AppTextButton(onClick = {
                     save(jsonOf("index" to d.int("index"), "delete" to true))
                     removing = null
                 }) { Text("Remove") }
             },
-            dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel") } },
+            dismissButton = { AppTextButton(onClick = { removing = null }) { Text("Cancel") } },
         )
     }
     if (adding || editing != null) {
@@ -160,7 +162,7 @@ private fun DepositDialog(view: JSONObject?, d: JSONObject?, onDismiss: () -> Un
             }
         },
         confirmButton = {
-            TextButton(enabled = ok, onClick = {
+            AppTextButton(enabled = ok, onClick = {
                 onSave(
                     jsonOf(
                         "index" to d?.int("index"), "bank" to bank, "principal" to Fmt.parseAmount(principal), "rate" to rate.toDoubleOrNull(), "start" to start,
@@ -169,7 +171,7 @@ private fun DepositDialog(view: JSONObject?, d: JSONObject?, onDismiss: () -> Un
                 )
             }) { Text("Save") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { AppTextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
 
@@ -214,7 +216,7 @@ fun OtherAssetsScreen(vm: MainViewModel, onBack: () -> Unit) {
                 }
             }
             Spacer(Modifier.height(16.dp))
-            Button(onClick = { adding = true }, modifier = Modifier.fillMaxWidth()) { Text("Add an asset") }
+            AppButton(onClick = { adding = true }, modifier = Modifier.fillMaxWidth()) { Text("Add an asset") }
             Spacer(Modifier.height(32.dp))
         }
     }
@@ -237,14 +239,14 @@ fun OtherAssetsScreen(vm: MainViewModel, onBack: () -> Unit) {
                 }
             },
             confirmButton = {
-                TextButton(enabled = Fmt.parseAmount(value) != null, onClick = {
+                AppTextButton(enabled = Fmt.parseAmount(value) != null, onClick = {
                     save(jsonOf("index" to o?.int("index"), "kind" to kind, "name" to name.ifBlank { null }, "value_inr" to Fmt.parseAmount(value)))
                 }) { Text("Save") }
             },
             dismissButton = {
                 Row {
-                    if (o != null) TextButton(onClick = { save(jsonOf("index" to o.int("index"), "delete" to true)) }) { Text("Remove") }
-                    TextButton(onClick = { adding = false; editing = null }) { Text("Cancel") }
+                    if (o != null) AppTextButton(onClick = { save(jsonOf("index" to o.int("index"), "delete" to true)) }) { Text("Remove") }
+                    AppTextButton(onClick = { adding = false; editing = null }) { Text("Cancel") }
                 }
             },
         )
