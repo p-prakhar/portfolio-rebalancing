@@ -32,7 +32,8 @@ def set_fetcher(fn) -> None:
 
 def _get(url: str) -> str:
     if _fetcher is not None:
-        return str(_fetcher(url) if callable(_fetcher) else _fetcher.get(url))
+        # A Java object is callable from Python even when its class is not a functional interface, so prefer .get.
+        return str(_fetcher.get(url) if hasattr(_fetcher, "get") else _fetcher(url))
     import requests
     r = requests.get(url, headers=HEADERS, timeout=25)
     r.raise_for_status()
