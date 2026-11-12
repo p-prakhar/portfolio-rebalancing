@@ -82,7 +82,8 @@ chaquopy {
             install("python-dateutil")
             install("requests")
             install("openpyxl")
-            install("casparser")
+            // casparser (CAS PDFs) is left out: it needs pydantic-core and PyMuPDF, which have no Android wheels.
+            // The engine reports CAS import as unavailable on ImportError.
         }
         // The engine reads site_template.html and the shipped YAML through normal file paths.
         extractPackages("pe", "pe_shipped")
