@@ -218,12 +218,21 @@ def lots_from_etrade(path: str, ticker: str, usd_inr: Callable[[date], float], s
 
 def fx_lookup() -> Callable[[date], float]:
     """USD/INR on or before a date, from Yahoo; falls back to the latest rate if the date is out of range."""
-    import yfinance as yf
-    from . import quiet
-    with quiet():
-        s = yf.download("INR=X", period="max", progress=False, auto_adjust=True)["Close"]
-    s = s.squeeze().dropna()
-    s.index = pd.to_datetime(s.index).tz_localize(None)
+    try:
+        import yfinance as yf
+    except ImportError:
+        yf = None
+    if yf is None:
+        from . import yahoo_lite
+        s = yahoo_lite.history("INR=X", "2005-01-01")
+    else:
+        from . import quiet
+        with quiet():
+            s = yf.download("INR=X", period="max", progress=False, auto_adjust=True)["Close"]
+        s = s.squeeze().dropna()
+        s.index = pd.to_datetime(s.index).tz_localize(None)
+    if s.empty:
+        raise ValueError("no USD/INR history")
 
     def f(d: date) -> float:
         sub = s.loc[:pd.Timestamp(d)]

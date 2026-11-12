@@ -1,13 +1,15 @@
 """Settings and holdings loading."""
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 
 import yaml
 
-ROOT = Path(__file__).resolve().parent.parent
+# PE_HOME moves config/, state/, data/ and reports/ somewhere writable (the Android app sets it to its private storage).
+ROOT = Path(os.environ.get("PE_HOME") or Path(__file__).resolve().parent.parent)
 
 
 @dataclass
