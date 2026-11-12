@@ -50,6 +50,8 @@ import app.portfolioengine.ui.screens.DepositsScreen
 import app.portfolioengine.ui.screens.ImportScreen
 import app.portfolioengine.ui.screens.MoreTab
 import app.portfolioengine.ui.screens.OnboardingScreen
+import app.portfolioengine.ui.screens.SourceGuideScreen
+import app.portfolioengine.ui.screens.SourcesScreen
 import app.portfolioengine.ui.screens.OtherAssetsScreen
 import app.portfolioengine.ui.screens.PlanTab
 import app.portfolioengine.ui.screens.PortfolioTab
@@ -72,6 +74,8 @@ object Routes {
     const val OTHERS = "others"
     const val REPORTS = "reports"
     const val SETTINGS = "settings"
+    const val SOURCES = "sources"
+    fun guide(id: String) = "guide/$id"
     fun web(path: String, title: String, scripts: Boolean) = "web?path=${Uri.encode(path)}&title=${Uri.encode(title)}&scripts=$scripts"
 }
 
@@ -135,6 +139,13 @@ private fun AppNav(vm: MainViewModel, nav: NavHostController) {
             ImportScreen(vm, typed = it.arguments?.getBoolean("typed") ?: false, onBack = back)
         }
         composable(Routes.STARTER) { StarterScreen(vm, onBack = back) }
+        composable(Routes.SOURCES) { SourcesScreen(go = { r -> nav.navigate(r) }, onBack = back) }
+        composable("guide/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) {
+            SourceGuideScreen(vm, id = it.arguments?.getString("id").orEmpty(), go = { r ->
+                // once a file is picked the guide has done its job, so Back from the import goes home
+                nav.navigate(r) { if (r == Routes.IMPORT) popUpTo("guide/{id}") { inclusive = true } }
+            }, onBack = back)
+        }
         composable("add?fund={fund}", arguments = listOf(navArgument("fund") { type = NavType.BoolType; defaultValue = false })) {
             AddHoldingScreen(vm, fund = it.arguments?.getBoolean("fund") ?: false, onBack = back)
         }

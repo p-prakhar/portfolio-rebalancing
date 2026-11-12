@@ -65,7 +65,7 @@ val IMPORT_MIME = arrayOf(
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/x-yaml", "application/yaml", "application/octet-stream",
 )
 
-/** First run: four ways in, the easiest first. */
+/** First run: start from the app you already use. The other ways in sit below for people with no file. */
 @Composable
 fun OnboardingScreen(vm: MainViewModel, go: (String) -> Unit) {
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -76,20 +76,18 @@ fun OnboardingScreen(vm: MainViewModel, go: (String) -> Unit) {
     }
     Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
         Spacer(Modifier.height(32.dp))
-        Text("What do you own?", style = MaterialTheme.typography.headlineMedium)
+        Text("Where are your investments?", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(8.dp))
-        Muted("Tell the engine once. It then checks every day whether a rebalance is worth its tax and fees, and says why. Everything stays on this phone.")
-        Spacer(Modifier.height(24.dp))
+        Muted("Pick an app to see exactly how to bring them in. It takes about two minutes, you can add more places afterwards, and everything stays on this phone.")
+        Spacer(Modifier.height(20.dp))
+        SourceList { go(Routes.guide(it.id)) }
+        Spacer(Modifier.height(12.dp))
+        WayIn(Icons.Filled.UploadFile, "I already have a file", "Statement, tradebook, holdings export or backup. The app works out which it is.") { picker.launch(IMPORT_MIME) }
+        SectionTitle("Just want to try it?")
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            WayIn(Icons.Filled.UploadFile, "Import a file", "Broker tradebook or holdings export, E*TRADE Benefit History, mutual fund CAS, or a backup. The app works out which it is.") { picker.launch(IMPORT_MIME) }
             WayIn(Icons.Filled.Dashboard, "Start from a typical portfolio", "Pick something close to yours and a rough amount. Fix the details later.") { go(Routes.STARTER) }
-            WayIn(Icons.Filled.EditNote, "Type or paste a list", "One holding per line, for example: TCS 12 3900 2024-09-16") { go(Routes.IMPORT_TYPED) }
             WayIn(Icons.Filled.Edit, "Add one holding", "Search a stock, ETF or mutual fund and enter what you paid.") { go(Routes.ADD) }
         }
-        SectionTitle("Where do I find my files?")
-        AppCard { FileGuides() }
-        Spacer(Modifier.height(16.dp))
-        Muted("You can also share a file to this app from your mail or file manager.")
         Spacer(Modifier.height(32.dp))
     }
 }
@@ -106,28 +104,6 @@ private fun WayIn(icon: ImageVector, title: String, body: String, onClick: () ->
             }
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-    }
-}
-
-@Composable
-fun FileGuides() {
-    Disclosure("Zerodha") {
-        Muted("console.zerodha.com > Reports > Tradebook > Equity > pick the dates > download CSV. Console gives about one financial year at a time, so download each year you traded and pick all the files together. The tradebook is better than the holdings export because it has purchase dates.")
-    }
-    Disclosure("Groww, Upstox and other Indian brokers") {
-        Muted("Download the order or trade history as CSV or Excel from the reports section. A holdings export also works: you will be asked roughly when you bought, because it has no dates.")
-    }
-    Disclosure("Mutual funds (any fund house)") {
-        Muted("Request a detailed Consolidated Account Statement from camsonline.com or mfcentral.com for the period from your first investment to today. It arrives by email as a PDF with the password you chose.")
-    }
-    Disclosure("E*TRADE stock plan (RSU, ESPP)") {
-        Muted("etrade.com > At Work > My Account > Benefit History > Download > Download Expanded. The Excel file holds both RSUs and ESPP. Shares already sold are worked out from it.")
-    }
-    Disclosure("Interactive Brokers and other US brokers") {
-        Muted("Export trades as CSV with symbol, date, buy or sell, quantity, price and currency. Dollar prices are converted to rupees.")
-    }
-    Disclosure("The engine on your computer") {
-        Muted("Share config/holdings.yaml from the computer to this phone and open it here. It replaces what is in the app.")
     }
 }
 
