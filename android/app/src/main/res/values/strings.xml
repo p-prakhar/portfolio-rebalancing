@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Portfolio Engine</string>
+    <string name="import_label">Import into Portfolio Engine</string>
+    <string name="channel_checks">Portfolio checks</string>
+    <string name="channel_checks_desc">Tells you when the engine thinks a rebalance is worth it, or when a waiting trade should be placed.</string>
+</resources>

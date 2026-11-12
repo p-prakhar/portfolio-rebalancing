@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A balance: two pans level on a beam. Drawn inside the 66dp safe zone of the 108dp adaptive canvas. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="@color/icon_fg" android:pathData="M52,34h4v40h-4z" />
+    <path android:fillColor="@color/icon_fg" android:pathData="M32,38h44v4h-44z" />
+    <path android:fillColor="@color/icon_fg" android:pathData="M42,74h24v4h-24z" />
+    <path android:fillColor="@color/icon_accent" android:pathData="M26,56a10,10 0 0 0 20,0z" />
+    <path android:fillColor="@color/icon_accent" android:pathData="M62,56a10,10 0 0 0 20,0z" />
+    <path android:fillColor="@color/icon_fg" android:pathData="M35,40h2v16h-2z" />
+    <path android:fillColor="@color/icon_fg" android:pathData="M71,40h2v16h-2z" />
+    <path android:fillColor="@color/icon_fg" android:pathData="M54,30m-4,0a4,4 0 1 0 8,0a4,4 0 1 0 -8,0" />
+</vector>
