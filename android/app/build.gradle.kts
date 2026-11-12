@@ -35,8 +35,8 @@ android {
         versionCode = 1
         versionName = "1.0.0"
         ndk {
-            // arm64 for phones, x86_64 for the emulator
-            abiFilters += listOf("arm64-v8a", "x86_64")
+            // arm64 for phones, x86_64 for the emulator. -Pabi=arm64-v8a builds a phone-only (smaller) APK.
+            abiFilters += (providers.gradleProperty("abi").orNull?.split(",") ?: listOf("arm64-v8a", "x86_64"))
         }
         vectorDrawables { useSupportLibrary = true }
     }
