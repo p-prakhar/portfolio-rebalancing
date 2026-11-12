@@ -66,6 +66,9 @@ class Book:
     log: list = field(default_factory=list)
     guard_mem: dict = field(default_factory=dict)   # crash guard: pre-exit weights of a buy & hold book
     journal: list = field(default_factory=list)    # one entry per day the planner ordered trades: what, and why
+    fills: list = field(default_factory=list)      # (day, side, symbol, rupees, kind) for every executed leg
+    deposits: list = field(default_factory=list)   # (timestamp, market value) of lots that joined after the start (opts["inflows"])
+    alloc: list = field(default_factory=list)      # (day, {symbol: value}, cash) every opts["record_every"] days
 
 
 def _sell(book: Book, settings: Settings, t: Trade, frac: float, price: float, day: date, usd_inr):
@@ -122,7 +125,9 @@ def _check_days(idx: pd.DatetimeIndex, freq: str) -> set:
 
 
 def run_variant(name, policy, execution, harvest, init_lots, px, vix, settings: Settings, start, fx=None, opts: dict | None = None):
-    """`opts` (optional) changes the timing rules for this variant: check (frequency), gate (name), gate_args, window_days, ltcg_wait_max_days."""
+    """`opts` (optional) changes the timing rules for this variant: check (frequency), gate (name), gate_args, window_days, ltcg_wait_max_days.
+    It can also describe a real purchase history: cash (rupees held at the start), inflows ({timestamp: [Lot]}: lots that join the
+    book on that day, the same for every strategy) and record_every (keep a holdings snapshot every n days in book.alloc)."""
     opts = opts or {}
     if any(k in opts for k in ("check", "window_days", "ltcg_wait_max_days")):
         settings = copy.deepcopy(settings)
@@ -135,7 +140,8 @@ def run_variant(name, policy, execution, harvest, init_lots, px, vix, settings: 
     guarded = policy.endswith("+guard")
     glevel = crash.level_series(px, vix, settings)["level"] if guarded else None     # causal, so reading day t equals running it on data up to t
     acted_level = 0
-    book = Book(copy.deepcopy(init_lots), 0.0, {b: 0.0 for b in BUCKETS}, fy_start_year(idx[0].date()))
+    book = Book(copy.deepcopy(init_lots), float(opts.get("cash", 0.0)), {b: 0.0 for b in BUCKETS}, fy_start_year(idx[0].date()))
+    inflows, rec = opts.get("inflows") or {}, int(opts.get("record_every") or 0)
     pending: list[Leg] = []
     navs = []
     for i, ts in enumerate(idx):
@@ -153,6 +159,10 @@ def run_variant(name, policy, execution, harvest, init_lots, px, vix, settings: 
             book.fy_realised["eq_st"] -= res.carry_forward_st_loss
             book.fy_realised["oth_lt"] -= res.carry_forward_lt_loss
             book.fy = fy
+        if ts in inflows:       # money the investor added on this day arrives as the lots they actually bought
+            new = copy.deepcopy(inflows[ts])
+            book.lots += new
+            book.deposits.append((ts, sum(l.qty * (float(row[l.symbol]) if l.symbol in row and row[l.symbol] == row[l.symbol] else l.price) for l in new)))
         # work pending legs (sells first so buys can be funded)
         for leg in sorted(pending, key=lambda l: l.trade.side != "sell"):
             t = leg.trade
@@ -179,11 +189,13 @@ def run_variant(name, policy, execution, harvest, init_lots, px, vix, settings: 
                 frac = 1 - leg.done_frac
             if t.side == "sell":
                 if leg.mode == "twap":
-                    _sell_twap(book, settings, t, leg, p, day, usd_inr)
+                    moved = _sell_twap(book, settings, t, leg, p, day, usd_inr)
                 else:
-                    _sell(book, settings, t, 1.0, p, day, usd_inr)
+                    moved = _sell(book, settings, t, 1.0, p, day, usd_inr)
             else:
-                _buy(book, settings, t.symbol, t.value * frac, p, day, usd_inr, not t.kind.startswith("harvest"))
+                moved = _buy(book, settings, t.symbol, t.value * frac, p, day, usd_inr, not t.kind.startswith("harvest"))
+            if moved:
+                book.fills.append((day, t.side, t.symbol, float(moved), t.kind))
             leg.done_frac += frac
             book.log.append((day, t.side.upper(), f"{t.symbol} {frac:.0%} of Rs {t.value:,.0f} @ {p:,.2f} [{t.kind}]"))
         pending = [l for l in pending if l.done_frac < 1 - 1e-9]
@@ -221,6 +233,12 @@ def run_variant(name, policy, execution, harvest, init_lots, px, vix, settings: 
             for d in plan.deferred:
                 book.log.append((day, "WAIT", d))
         navs.append(_nav(book, row))
+        if rec and (i % rec == 0 or i == len(idx) - 1):
+            snap: dict[str, float] = {}
+            for l in book.lots:
+                p_ = row.get(l.symbol)
+                snap[l.symbol] = snap.get(l.symbol, 0.0) + l.qty * (float(l.price) if p_ is None or pd.isna(p_) else float(p_))
+            book.alloc.append((day, snap, float(book.cash)))
     nav = pd.Series(navs, index=idx, name=name)
     last = px.loc[idx[-1]]
     accrued = compute_tax(book.fy_realised, settings).tax

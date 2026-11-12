@@ -100,6 +100,10 @@ def timing_step(plan, px, settings) -> list[str]:
         if leg["kind"] == "risk_exit" and tm["regime_override_secretary"]:
             lines.append(f"{leg['side'].upper()} {leg['symbol']}: risk-off exit, execute now rather than waiting for a better price.")
             continue
+        if leg.get("fired"):     # a window replayed over past prices (pe/replay.py) that already reached its trading day
+            lines.append(f"{leg['side'].upper()} {leg['symbol']}: **EXECUTE TODAY**. Replayed over the days already gone, this window reached "
+                         f"its trading day on {leg['fired']}, so the waiting is done.")
+            continue
         dec, why = secretary_decision(obs, state["n"], leg["side"])
         lines.append(f"{leg['side'].upper()} {leg['symbol']}: **{'EXECUTE TODAY' if dec == 'execute' else 'wait'}**. {why}")
     lines.append("Run `python main.py reset-window` after placing the trades.")

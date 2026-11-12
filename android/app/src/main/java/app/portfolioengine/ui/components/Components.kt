@@ -283,27 +283,21 @@ fun <T> DropdownField(label: String, options: List<Pair<T, String>>, selected: T
     }
 }
 
-/** One horizontal bar split by share, with a legend underneath. Segments are (label, value). */
+/** One horizontal bar split by share, with a legend underneath. Segments are (sleeve label, value); each sleeve keeps its own colour. */
 @Composable
 fun AllocationBar(segments: List<Pair<String, Double>>, modifier: Modifier = Modifier) {
-    val colors = LocalTokens.current.series
     val total = segments.sumOf { it.second }.takeIf { it > 0 } ?: return
     val shown = segments.filter { it.second / total >= 0.005 }
+    val colors = shown.map { sleeveColor(it.first) }
     Column(modifier) {
-        Row(Modifier.fillMaxWidth().height(14.dp).clip(RoundedCornerShape(7.dp)), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(Modifier.fillMaxWidth().height(12.dp).clip(RoundedCornerShape(6.dp)), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             shown.forEachIndexed { i, (_, v) ->
-                Box(Modifier.weight((v / total).toFloat().coerceAtLeast(0.005f)).fillMaxSize().background(colors[i.coerceAtMost(colors.lastIndex)]))
+                Box(Modifier.weight((v / total).toFloat().coerceAtLeast(0.005f)).fillMaxSize().background(colors[i]))
             }
         }
         Spacer(Modifier.height(10.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            shown.forEachIndexed { i, (label, v) ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(10.dp).clip(CircleShape).background(colors[i.coerceAtMost(colors.lastIndex)]))
-                    Spacer(Modifier.width(6.dp))
-                    Text("$label ${Fmt.pct(v / total, 0)}", style = MaterialTheme.typography.labelLarge)
-                }
-            }
+            shown.forEachIndexed { i, (label, v) -> LegendItem(colors[i], label, Fmt.pct(v / total, 0)) }
         }
     }
 }

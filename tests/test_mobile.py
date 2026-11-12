@@ -181,3 +181,55 @@ def test_password_protected_excel(home, tmp_path):
     assert pv["needs"] == ["password"] and "did not open" in pv["message"]
     pv = ok(call(home, f"out = M.import_preview(json.dumps({{'paths': [{str(locked)!r}], 'password': 'ABCDE1234F'}}))"))
     assert pv["kind"] == "tradebook" and pv["lots"] == 2
+
+
+def test_backtest_on_own_lots_and_window_replay(home):
+    ok(call(home, "out = M.init()"))
+    ok(call(home, "out = M.add_lot(json.dumps({'symbol': 'NIFTYBEES', 'buy_date': '2024-08-14', 'qty': 3000, 'price': 250}))"))
+    ok(call(home, "out = M.add_lot(json.dumps({'symbol': 'GOLDBEES', 'buy_date': '2025-03-03', 'qty': 500, 'price': 70}))"))
+    s = ok(call(home, "out = M.backtest_setup(json.dumps({'demo': True}))"))
+    assert s["start"] >= "2024-08-14" and s["deposits"] == 1 and len(s["dates"]) == len(s["invested"]) <= 122
+    assert s["invested"][-1] > s["invested"][0]          # the second purchase is money added, not a gain
+    mine = ok(call(home, "out = M.backtest_run('yours', json.dumps({'demo': True}))"))
+    assert len(mine["curve"]) == len(s["dates"]) and mine["trades"] == 0 and mine["costs"] == 0
+    assert all(len(a["values"]) == len(s["dates"]) for a in mine["alloc"]) and {a["sleeve"] for a in mine["alloc"]} == {"india_equity", "gold"}
+    assert abs(mine["end_value"] - sum(a["values"][-1] for a in mine["alloc"])) < 5
+    other = ok(call(home, "out = M.backtest_run('dual_momentum', json.dumps({'demo': True}))"))
+    assert other["invested"] == mine["invested"] and other["trades"] > 0 and other["costs"] > 0
+    assert sum(f["bought"] + f["sold"] for f in other["flows"]) > 0
+    assert not call(home, "out = M.backtest_run('nope', json.dumps({'demo': True}))")["ok"]
+    recent = ok(call(home, "out = M.backtest_setup(json.dumps({'demo': True, 'range': '6m'}))"))
+    assert recent["start"] > s["start"] and recent["deposits"] == 0
+
+    ok(call(home, "out = M.save_settings(json.dumps({'policy': 'dual_momentum'}))"))
+    r = ok(call(home, "out = M.secretary_replay(json.dumps({'demo': True}))"))
+    assert r["n"] == 10 and r["decision"] in ("execute", "observe", "mixed", "none")
+    for leg in r["legs"]:
+        assert len(leg["prices"]) == r["n"] and leg["signal"][-1] is True and 1 <= leg["run"] <= r["n"]
+        assert leg["full"]["decision"] == "execute"       # a full window always ends in a trade
+        assert leg["now"]["day"] == leg["run"]
+    if r["legs"]:
+        b = ok(call(home, "out = M.backdate_window(json.dumps({'demo': True, 'mode': 'full'}))"))
+        assert b["legs"] == len(r["legs"]) and (home / "state" / "execution.json").exists()
+
+
+def test_replay_leg_has_no_lookahead():
+    from pe.replay import replay_leg
+    dates = [f"2026-01-{d:02d}" for d in range(1, 11)]
+    falling = [100 - i for i in range(10)]
+    buy = replay_leg(dates, falling, [True] * 10, 10, "buy")
+    assert buy["now"]["fired"] == dates[4] and buy["now"]["reason"] == "fired_earlier" and buy["now"]["edge"] > 0   # first new low after 4 watching days
+    sell = replay_leg(dates, falling, [True] * 10, 10, "sell")
+    assert sell["now"]["fired"] == dates[9] and sell["now"]["reason"] == "last_day"
+    fresh = replay_leg(dates, falling, [False] * 7 + [True] * 3, 10, "buy")
+    assert fresh["run"] == 3 and fresh["now"]["decision"] == "observe" and fresh["now"]["left"] == 7 and fresh["full"]["decision"] == "execute"
+    # changing a later price never changes an earlier day's decision
+    bumped = replay_leg(dates, falling[:6] + [200, 200, 200, 200], [True] * 10, 10, "buy")
+    assert [s["decision"] for s in bumped["full"]["steps"][:6]] == [s["decision"] for s in buy["full"]["steps"][:6]]
+
+
+def test_profile_help_is_a_list_for_the_phone(home):
+    ok(call(home, "out = M.init()"))
+    p = ok(call(home, "out = M.profile()"))
+    assert [i["label"] for i in p["income_where_items"]][:2] == ["Gross salary", "RSU/ESPP perquisite"]
+    assert all(i["lines"] and "  " not in " ".join(i["lines"]) for i in p["income_where_items"])

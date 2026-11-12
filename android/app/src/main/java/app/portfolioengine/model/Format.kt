@@ -37,6 +37,22 @@ object Fmt {
         }
     }
 
+    /** Tightest form, for chart axes: "₹8.5L", "₹1.2Cr", "₹45K". */
+    fun inrCompact(v: Double): String {
+        val a = abs(v)
+        val sign = if (v < 0) "-" else ""
+        return when {
+            a >= 1e7 -> sign + "₹" + trim(a / 1e7, 2) + "Cr"
+            a >= 1e5 -> sign + "₹" + trim(a / 1e5, 1) + "L"
+            a >= 1e3 -> sign + "₹" + (a / 1e3).roundToLong() + "K"
+            else -> sign + "₹" + a.roundToLong()
+        }
+    }
+
+    fun signedInrShort(v: Double): String = (if (v > 0) "+" else "") + inrShort(v)
+
+    fun signedPct(fraction: Double, digits: Int = 1): String = (if (fraction > 0) "+" else "") + pct(fraction, digits)
+
     fun signedInr(v: Double): String = (if (v > 0) "+" else "") + inr(v)
 
     fun pct(fraction: Double, digits: Int = 1): String = String.format(Locale.US, "%.${digits}f%%", fraction * 100)

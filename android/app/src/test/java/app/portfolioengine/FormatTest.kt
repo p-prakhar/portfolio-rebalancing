@@ -62,4 +62,15 @@ class FormatTest {
         assertTrue(!o.has("price"))
         assertEquals(2, o.getJSONArray("paths").length())
     }
+
+    @Test
+    fun compactAxisLabels() {
+        assertEquals("₹50K", Fmt.inrCompact(50000.0))
+        assertEquals("₹8.5L", Fmt.inrCompact(850000.0))
+        assertEquals("₹10L", Fmt.inrCompact(1000000.0))
+        assertEquals("₹1.25Cr", Fmt.inrCompact(12500000.0))
+        assertEquals("₹900", Fmt.inrCompact(900.0))
+        assertEquals("+12.5%", Fmt.signedPct(0.125))
+        assertEquals("-₹1.5 lakh", Fmt.signedInrShort(-150000.0))
+    }
 }
