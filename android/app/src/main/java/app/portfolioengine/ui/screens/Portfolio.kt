@@ -146,7 +146,7 @@ fun PortfolioTab(vm: MainViewModel, state: UiState, go: (String) -> Unit) {
             Column(Modifier.navigationBarsPadding().padding(bottom = 16.dp)) {
                 Text("Add to your portfolio", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
                 SheetRow("From a broker or app, step by step", "Zerodha, Groww, Upstox, E*TRADE and others") { adding = false; go(Routes.SOURCES) }
-                SheetRow("Import a file", "Tradebook, holdings export, E*TRADE, CAS, backup") { adding = false; picker.launch(IMPORT_MIME) }
+                SheetRow("Import a file", "Tradebook, holdings export, E*TRADE, backup") { adding = false; picker.launch(IMPORT_MIME) }
                 SheetRow("Type or paste a list", "One holding per line") { adding = false; go(Routes.IMPORT_TYPED) }
                 SheetRow("A stock or ETF", "Search, then enter what you paid") { adding = false; go(Routes.ADD) }
                 SheetRow("A mutual fund", "Search the fund, then the amount and date") { adding = false; go(Routes.ADD_FUND) }

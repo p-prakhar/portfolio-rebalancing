@@ -45,8 +45,8 @@ android {
         applicationId = "app.portfolioengine"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.0.0-beta3"
+        versionCode = 4
+        versionName = "1.0.0-beta4"
         ndk {
             // arm64 for phones, x86_64 for the emulator. -Pabi=arm64-v8a builds a phone-only (smaller) APK.
             abiFilters += (providers.gradleProperty("abi").orNull?.split(",") ?: listOf("arm64-v8a", "x86_64"))
