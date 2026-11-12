@@ -57,6 +57,7 @@ fun DepositsScreen(vm: MainViewModel, onBack: () -> Unit) {
     var view by remember { mutableStateOf<JSONObject?>(null) }
     var editing by remember { mutableStateOf<JSONObject?>(null) }
     var adding by remember { mutableStateOf(false) }
+    var removing by remember { mutableStateOf<JSONObject?>(null) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { (vm.call("fds") as? EngineResult.Ok)?.let { view = it.obj } }
     fun save(payload: String) {
@@ -100,7 +101,7 @@ fun DepositsScreen(vm: MainViewModel, onBack: () -> Unit) {
                             )
                             Row {
                                 TextButton(onClick = { editing = d }) { Text("Edit") }
-                                TextButton(onClick = { save(jsonOf("index" to d.int("index"), "delete" to true)) }) { Text("Remove") }
+                                TextButton(onClick = { removing = d }) { Text("Remove") }
                             }
                         }
                     }
@@ -110,6 +111,20 @@ fun DepositsScreen(vm: MainViewModel, onBack: () -> Unit) {
             Button(onClick = { adding = true }, modifier = Modifier.fillMaxWidth()) { Text("Add a deposit") }
             Spacer(Modifier.height(32.dp))
         }
+    }
+    removing?.let { d ->
+        AlertDialog(
+            onDismissRequest = { removing = null },
+            title = { Text("Remove ${d.str("label")}?") },
+            text = { Text("This only removes it from the app. Nothing happens at the bank.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    save(jsonOf("index" to d.int("index"), "delete" to true))
+                    removing = null
+                }) { Text("Remove") }
+            },
+            dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel") } },
+        )
     }
     if (adding || editing != null) {
         DepositDialog(view, editing, onDismiss = { adding = false; editing = null }, onSave = ::save)

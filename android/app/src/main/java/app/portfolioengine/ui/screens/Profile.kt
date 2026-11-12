@@ -37,6 +37,7 @@ import app.portfolioengine.model.int
 import app.portfolioengine.model.num
 import app.portfolioengine.model.obj
 import app.portfolioengine.model.str
+import app.portfolioengine.ui.components.ActionBar
 import app.portfolioengine.ui.components.AmountField
 import app.portfolioengine.ui.components.AppCard
 import app.portfolioengine.ui.components.ChoiceRow
@@ -79,8 +80,25 @@ fun ProfileScreen(vm: MainViewModel, onBack: () -> Unit) {
     }
     LaunchedEffect(Unit) { (vm.call("profile") as? EngineResult.Ok)?.let { load(it.obj) } }
 
-    SubScreen("Profile and income", onBack) { pad ->
-        Column(Modifier.fillMaxSize().padding(pad).imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
+    val saveNow: () -> Unit = {
+                val o = JSONObject()
+                o.put("age", f["age"]?.toDoubleOrNull() ?: 30.0).put("horizon_years", f["horizon_years"]?.toDoubleOrNull() ?: 15.0)
+                o.put("risk", risk).put("tax_regime", regime).put("count_backups", backups).put("has_rsu", rsu)
+                o.put("employer_ticker", if (rsu) f["employer_ticker"].orEmpty() else "")
+                for (k in MONEY) o.put(k, Fmt.parseAmount(f[k].orEmpty()) ?: 0.0)
+                scope.launch {
+                    when (val r = vm.call("save_profile", o.toString())) {
+                        is EngineResult.Err -> error = r.message
+                        is EngineResult.Ok -> {
+                            vm.profileSaved()
+                            vm.say("Profile saved.")
+                            onBack()
+                        }
+                    }
+                }
+            }
+    SubScreen("Profile and income", onBack, bottomBar = { if (view != null) ActionBar("Save", error = error, onClick = saveNow) }) { pad ->
+        Column(Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
             val v = view
             if (v == null) {
                 Muted("Loading")
@@ -127,25 +145,6 @@ fun ProfileScreen(vm: MainViewModel, onBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
                 )
             }
-            if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
-            Spacer(Modifier.height(20.dp))
-            Button(modifier = Modifier.fillMaxWidth(), onClick = {
-                val o = JSONObject()
-                o.put("age", f["age"]?.toDoubleOrNull() ?: 30.0).put("horizon_years", f["horizon_years"]?.toDoubleOrNull() ?: 15.0)
-                o.put("risk", risk).put("tax_regime", regime).put("count_backups", backups).put("has_rsu", rsu)
-                o.put("employer_ticker", if (rsu) f["employer_ticker"].orEmpty() else "")
-                for (k in MONEY) o.put(k, Fmt.parseAmount(f[k].orEmpty()) ?: 0.0)
-                scope.launch {
-                    when (val r = vm.call("save_profile", o.toString())) {
-                        is EngineResult.Err -> error = r.message
-                        is EngineResult.Ok -> {
-                            vm.profileSaved()
-                            vm.say("Profile saved.")
-                            onBack()
-                        }
-                    }
-                }
-            }) { Text("Save") }
             Spacer(Modifier.height(32.dp))
         }
     }

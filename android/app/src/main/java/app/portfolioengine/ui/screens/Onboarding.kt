@@ -42,6 +42,7 @@ import app.portfolioengine.model.objects
 import app.portfolioengine.model.str
 import app.portfolioengine.engine.EngineResult
 import app.portfolioengine.ui.Routes
+import app.portfolioengine.ui.components.ActionBar
 import app.portfolioengine.ui.components.AmountField
 import app.portfolioengine.ui.components.AppCard
 import app.portfolioengine.ui.components.ChoiceRow
@@ -144,7 +145,25 @@ fun StarterScreen(vm: MainViewModel, onBack: () -> Unit) {
     LaunchedEffect(Unit) {
         ((vm.call("starters") as? EngineResult.Ok)?.data as? JSONArray)?.let { a -> starters = (0 until a.length()).map { a.getJSONObject(it) } }
     }
-    SubScreen("Start from a typical portfolio", onBack) { pad ->
+    val amt = Fmt.parseAmount(amount)
+    val apply: () -> Unit = {
+                    busy = true
+                    scope.launch {
+                        when (val r = vm.call("apply_starter", jsonOf("id" to picked, "amount_inr" to amt, "buy_date" to date))) {
+                            is EngineResult.Err -> {
+                                error = r.message
+                                busy = false
+                            }
+                            is EngineResult.Ok -> {
+                                vm.holdingsChanged()
+                                onBack()
+                            }
+                        }
+                    }
+                }
+    SubScreen("Start from a typical portfolio", onBack, bottomBar = {
+        ActionBar(if (busy) "Setting up" else "Use this portfolio", enabled = !busy && picked.isNotEmpty() && amt != null && amt > 0, error = error, onClick = apply)
+    }) { pad ->
         Column(Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
             Muted("Pick the closest one. You can add, remove and correct holdings afterwards.")
             Spacer(Modifier.height(12.dp))
@@ -178,31 +197,6 @@ fun StarterScreen(vm: MainViewModel, onBack: () -> Unit) {
             }
             Spacer(Modifier.height(6.dp))
             Muted("The date only decides long-term versus short-term tax. Units are worked out from that day's closing price.")
-            if (error != null) {
-                Spacer(Modifier.height(10.dp))
-                Text(error!!, color = MaterialTheme.colorScheme.error)
-            }
-            Spacer(Modifier.height(20.dp))
-            val amt = Fmt.parseAmount(amount)
-            Button(
-                enabled = !busy && picked.isNotEmpty() && amt != null && amt > 0,
-                modifier = Modifier.fillMaxWidth(),
-                onClick = {
-                    busy = true
-                    scope.launch {
-                        when (val r = vm.call("apply_starter", jsonOf("id" to picked, "amount_inr" to amt, "buy_date" to date))) {
-                            is EngineResult.Err -> {
-                                error = r.message
-                                busy = false
-                            }
-                            is EngineResult.Ok -> {
-                                vm.holdingsChanged()
-                                onBack()
-                            }
-                        }
-                    }
-                },
-            ) { Text(if (busy) "Setting up" else "Use this portfolio") }
             Spacer(Modifier.height(32.dp))
         }
     }

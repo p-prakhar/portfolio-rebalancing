@@ -35,6 +35,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -49,6 +50,7 @@ import app.portfolioengine.model.objects
 import app.portfolioengine.model.str
 import app.portfolioengine.ui.Routes
 import app.portfolioengine.ui.components.AppCard
+import app.portfolioengine.ui.components.Disclosure
 import app.portfolioengine.ui.components.Muted
 import app.portfolioengine.ui.components.SectionTitle
 import app.portfolioengine.ui.components.SubScreen
@@ -173,11 +175,14 @@ fun ReportsScreen(vm: MainViewModel, onBack: () -> Unit, open: (String, String, 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun WebScreen(path: String, title: String, scripts: Boolean, onBack: () -> Unit) {
+    // paint the theme background first so a dark page never flashes white while it loads
+    val bg = MaterialTheme.colorScheme.background.toArgb()
     SubScreen(title, onBack) { pad ->
         AndroidView(
             modifier = Modifier.fillMaxSize().padding(pad),
             factory = { c ->
                 WebView(c).apply {
+                    setBackgroundColor(bg)
                     webViewClient = WebViewClient()
                     settings.javaScriptEnabled = scripts
                     settings.allowFileAccess = true
@@ -218,18 +223,36 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
             }
             SectionTitle("Strategy")
             AppCard {
-                s.objects("policies").forEachIndexed { i, p ->
+                val all = s.objects("policies")
+                val current = s.str("policy")
+                // the three most people want, plus whichever is selected; the rest stay one tap away
+                val front = all.filterIndexed { i, p -> i < 3 || p.str("id") == current }
+                front.forEachIndexed { i, p ->
                     if (i > 0) Rule()
-                    Row(Modifier.fillMaxWidth().clickable { vm.saveSettings(jsonOf("policy" to p.str("id"))) }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = s.str("policy") == p.str("id"), onClick = { vm.saveSettings(jsonOf("policy" to p.str("id"))) })
-                        Column(Modifier.weight(1f).padding(start = 4.dp)) {
-                            Text(p.str("name"), style = MaterialTheme.typography.bodyLarge)
-                            Muted(p.str("detail"))
-                        }
+                    PolicyRow(p, current) { vm.saveSettings(jsonOf("policy" to it)) }
+                }
+                val rest = all - front.toSet()
+                if (rest.isNotEmpty()) {
+                    Rule()
+                    Disclosure("More strategies", subtitle = "${rest.size} others the engine can run") {
+                        rest.forEach { p -> PolicyRow(p, current) { vm.saveSettings(jsonOf("policy" to it)) } }
                     }
                 }
             }
+            Spacer(Modifier.height(8.dp))
+            Muted("Changing the strategy changes the plan, not your holdings. Each one is judged over 10 years in the full report.")
             Spacer(Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+private fun PolicyRow(p: JSONObject, current: String, pick: (String) -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable { pick(p.str("id")) }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        RadioButton(selected = current == p.str("id"), onClick = { pick(p.str("id")) })
+        Column(Modifier.weight(1f).padding(start = 4.dp)) {
+            Text(p.str("name"), style = MaterialTheme.typography.bodyLarge)
+            Muted(p.str("detail"))
         }
     }
 }

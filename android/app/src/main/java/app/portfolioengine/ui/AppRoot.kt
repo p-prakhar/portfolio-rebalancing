@@ -1,7 +1,6 @@
 package app.portfolioengine.ui
 
 import android.net.Uri
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +22,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -91,7 +91,8 @@ fun AppRoot(vm: MainViewModel) {
         }
     }
 
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground) {
+      Box(Modifier.fillMaxSize()) {
         when {
             state.booting -> Booting()
             state.bootError != null -> BootFailed(state.bootError!!, vm::boot)
@@ -99,6 +100,7 @@ fun AppRoot(vm: MainViewModel) {
         }
         // screens draw their own bars; messages float above whatever is showing
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 88.dp))
+      }
     }
 }
 
@@ -169,6 +171,7 @@ private fun Home(vm: MainViewModel, nav: NavHostController) {
     }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        contentColor = MaterialTheme.colorScheme.onBackground,
         bottomBar = {
             NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
                 tabs.forEachIndexed { i, t ->
