@@ -966,10 +966,15 @@ def save_profile(payload):
     return _profile_view()
 
 
+_KIND_LABELS = {"epf": "EPF", "ppf": "PPF", "nps": "NPS", "sgb": "Sovereign Gold Bonds", "us_stock_other": "US stocks at another broker",
+                "gold_physical": "Physical gold", "cash_savings": "Savings balance"}
+
+
 def _others_view() -> dict:
     from .profile import KINDS, load_other
-    return {"items": [{"index": i, **o.__dict__, "cls": o.asset_class, "liquid": o.liquid} for i, o in enumerate(load_other())],
-            "kinds": [{"id": k, "label": k.replace("_", " ").capitalize(), "cls": v[0],
+    return {"items": [{"index": i, **o.__dict__, "cls": o.asset_class, "liquid": o.liquid,
+                       "kind_label": _KIND_LABELS.get(o.kind, o.kind.replace("_", " ").capitalize())} for i, o in enumerate(load_other())],
+            "kinds": [{"id": k, "label": _KIND_LABELS.get(k, k.replace("_", " ").capitalize()), "cls": v[0],
                        "where": v[1].replace(" (run: python main.py gold-prices)", ""), "liquid": v[2]} for k, v in KINDS.items()]}
 
 

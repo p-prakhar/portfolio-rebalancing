@@ -191,7 +191,7 @@ fun OtherAssetsScreen(vm: MainViewModel, onBack: () -> Unit) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(o.str("name"), style = MaterialTheme.typography.titleMedium)
-                                Muted(o.str("kind").replace('_', ' ').replaceFirstChar { it.uppercase() } + " · counted as " + o.str("cls").replace('_', ' '))
+                                Muted(o.str("kind_label") + " · counted as " + o.str("cls").replace('_', ' '))
                             }
                             Text(Fmt.inr(o.num("value_inr")), style = MaterialTheme.typography.titleMedium)
                         }
