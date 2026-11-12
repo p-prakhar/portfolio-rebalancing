@@ -77,22 +77,23 @@ val SOURCES = listOf(
         "groww", "Groww", "Stocks and ETFs",
         listOf(
             "Open the Groww app, tap your profile picture, then Reports.",
-            "Download the stock order history for the full period. Choose a date range from your first trade.",
-            "The holdings statement in the same place also works.",
-            "Come back here and choose the downloaded file.",
+            "Under Transactions, open the stock order history. Choose a date range from your first trade and tap Download.",
+            "Groww protects the file with your PAN in capital letters. Keep it handy: the app asks for it once and does not save it.",
+            "Come back here and choose the downloaded Excel file.",
         ),
         url = "https://groww.in", urlLabel = "Open Groww on the web",
-        note = "On the web the same data is under Orders, then Trade report, as CSV. Mutual funds held on Groww are quicker to add by name: go back and pick Mutual funds.",
+        note = "If the app says it cannot open the protected file, open it in a spreadsheet app, save a copy without the password and choose that. The holdings statement in Reports also works, but Groww sends it by email and it has no purchase dates. Mutual funds held on Groww are quicker to add by name: go back and pick Mutual funds.",
     ),
     Source(
         "upstox", "Upstox", "Stocks and ETFs",
         listOf(
-            "Open the account page in your browser and sign in. The trade reports are on the website, year by year.",
-            "Go to Reports, then Trade, and download the report for each financial year you traded in.",
+            "Open the Upstox app and tap the Profile tab, then My account, then Reports.",
+            "Tap Trade report, then Filters. Pick the segment and a financial year, and tap Get Report.",
+            "Download it, or have it sent to your email. Repeat for each financial year you bought in.",
             "Come back here and choose all the files together.",
         ),
-        url = "https://account.upstox.com/reports/trade", urlLabel = "Open Upstox reports",
-        note = "The Profit and Loss report in the Upstox app (Reports, then Profit and Loss, Realised) only lists what you sold, so it cannot show what you still hold. A holdings download from Portfolio also works.",
+        url = "https://account.upstox.com/reports/trade", urlLabel = "Open Upstox reports in the browser",
+        note = "The same trade reports are on the website if you prefer. The Profit and Loss report in the Upstox app (Reports, then Profit and Loss, Realised) only lists what you sold, so it cannot show what you still hold. A holdings download from Portfolio also works.",
     ),
     Source(
         "angel", "Angel One", "Trade history and holding statement",
@@ -107,8 +108,8 @@ val SOURCES = listOf(
     Source(
         "dhan", "Dhan", "Journal reports",
         listOf(
-            "Open the Dhan website or app and sign in.",
-            "Go to Journal and open Past Trades. Download the report for the full period.",
+            "Open the Dhan app, tap the profile icon at the top left, then All Statements.",
+            "Open All Exchange Transactions (Past Trades) and set the dates from your first trade. If there is no download there, the same report is under Journal on the Dhan website.",
             "For what you hold now, open Holdings Summary there and download it as CSV or Excel. In the app it can be emailed to you.",
             "Come back here and choose the downloaded file.",
         ),
@@ -149,7 +150,8 @@ val SOURCES = listOf(
         "us", "A US broker", "Interactive Brokers, Vested, INDmoney and others",
         listOf(
             "Sign in on the broker's website or app and find Reports, Statements or Activity.",
-            "Export your trades as CSV for the full period, with symbol, date, buy or sell, quantity and price.",
+            "Vested: on the website, Profile, then Transactions, then Download. Interactive Brokers: Performance and Reports, then Flex Queries or Activity statements, as CSV.",
+            "Export your trades for the full period, with symbol, date, buy or sell, quantity and price.",
             "Come back here and choose the file. Dollar prices are converted to rupees at each day's rate.",
         ),
     ),

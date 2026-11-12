@@ -702,7 +702,8 @@ def _needs(kind: str, needs: list[str], message: str) -> dict:
 
 
 KIND_LABELS = {"tradebook": "Trade history", "snapshot": "Holdings list", "etrade": "E*TRADE stock plan", "cas": "Mutual fund statement (CAS)",
-               "holdings_yaml": "Engine holdings file", "backup": "App backup", "text": "Typed lots"}
+               "holdings_yaml": "Engine holdings file", "backup": "App backup", "text": "Typed lots",
+               "locked": "Protected file"}
 
 
 @api
@@ -729,6 +730,17 @@ def import_preview(payload):
         return _preview("text", lots, meta, warns, replace=[])
     if not paths:
         raise ApiError("invalid", "Pick at least one file.")
+    if any(A.is_locked_excel(x) for x in paths):
+        ask = "This Excel file is password protected. Brokers usually use your PAN in capital letters. It is used once and not saved."
+        if not p.get("password"):
+            return _needs("locked", ["password"], ask)
+        try:
+            paths = [A.unlock_excel(x, str(p["password"]).strip()) if A.is_locked_excel(x) else x for x in paths]
+        except ImportError:
+            raise ApiError("unsupported", "Password-protected Excel files cannot be opened in this build. Open the file in a spreadsheet app, "
+                                          "save a copy without the password, and import that.")
+        except ValueError:
+            return _needs("locked", ["password"], "That password did not open the file. " + ask)
     kinds = [p.get("kind") or A.detect(x) for x in paths]
     kind = kinds[0]
     if any(k != kind for k in kinds):

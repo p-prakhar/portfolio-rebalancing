@@ -73,6 +73,33 @@ def _known_tokens() -> set[str]:
     return out
 
 
+def is_locked_excel(path: str) -> bool:
+    """A password-protected .xlsx is an OLE container, not a zip (Groww protects its reports with the PAN)."""
+    if not str(path).lower().endswith((".xlsx", ".xlsm")):
+        return False
+    try:
+        with open(path, "rb") as f:
+            return f.read(8) == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+    except OSError:
+        return False
+
+
+def unlock_excel(path: str, password: str) -> str:
+    """Write an unprotected copy next to the file and return its path. ImportError if the reader is not
+    installed, ValueError('bad_password') if the password does not open it."""
+    import msoffcrypto
+    out = Path(str(path) + ".open.xlsx")
+    try:
+        with open(path, "rb") as src, open(out, "wb") as dst:
+            f = msoffcrypto.OfficeFile(src)
+            f.load_key(password=password)
+            f.decrypt(dst)
+    except Exception as exc:
+        out.unlink(missing_ok=True)
+        raise ValueError("bad_password") from exc
+    return str(out)
+
+
 def read_table(path: str) -> pd.DataFrame:
     """Read a CSV or Excel sheet whose header row may sit below a few title lines (broker exports often do that)."""
     p = str(path).lower()

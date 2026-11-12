@@ -160,3 +160,24 @@ def test_markdown_pages_keep_tables_and_escape_html():
     from pe.mobile import md_to_html
     html = md_to_html("# Title\n\n| a | b |\n|---|---|\n| 1 | **x** |\n\n- one\n- two <script>\n")
     assert "<th>a</th>" in html and "<td><b>x</b></td>" in html and "<li>one</li>" in html and "<script>" not in html
+
+
+def test_password_protected_excel(home, tmp_path):
+    """Groww-style protected report: asks for the password, rejects a wrong one, then reads the trades."""
+    msoffcrypto = pytest.importorskip("msoffcrypto")
+    import io
+    import pandas as pd
+    ok(call(home, "out = M.init()"))
+    plain = io.BytesIO()
+    pd.DataFrame({"symbol": ["BANKBEES", "BANKBEES"], "trade_date": ["2024-03-01", "2024-04-01"], "trade_type": ["buy", "buy"],
+                  "quantity": [10, 5], "price": [500, 510], "trade_id": [1, 2]}).to_excel(plain, index=False)
+    plain.seek(0)
+    locked = tmp_path / "orders.xlsx"
+    with open(locked, "wb") as f:
+        msoffcrypto.OfficeFile(plain).encrypt("ABCDE1234F", f)
+    pv = ok(call(home, f"out = M.import_preview(json.dumps({{'paths': [{str(locked)!r}]}}))"))
+    assert pv["needs"] == ["password"]
+    pv = ok(call(home, f"out = M.import_preview(json.dumps({{'paths': [{str(locked)!r}], 'password': 'nope'}}))"))
+    assert pv["needs"] == ["password"] and "did not open" in pv["message"]
+    pv = ok(call(home, f"out = M.import_preview(json.dumps({{'paths': [{str(locked)!r}], 'password': 'ABCDE1234F'}}))"))
+    assert pv["kind"] == "tradebook" and pv["lots"] == 2
