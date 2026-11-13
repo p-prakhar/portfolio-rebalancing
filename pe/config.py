@@ -159,13 +159,23 @@ def register_assets(settings: Settings, holdings: Holdings) -> list[str]:
     return added
 
 
+MAX_PRICE_GAP_DAYS = 10     # an amount-only lot is priced at the first close on/after its buy date, but no later than this
+
+
 def resolve_amount_lots(holdings: Holdings, prices) -> Holdings:
-    """Turn `amount_inr` lots into qty/price using the close on (or just after) buy_date."""
+    """Turn `amount_inr` lots into qty/price using the close on (or just after) buy_date.
+
+    If the first available price is long after the purchase (the data source has lost the instrument's history), the
+    units and the cost basis would be wrong, and with them every gain, tax figure and backtest. Refuse instead."""
     for p in holdings.pending_amounts:
         series = prices[p["symbol"]].dropna()
         after = series[series.index >= str(p["buy_date"])]
         if after.empty:
             raise ValueError(f"No price for {p['symbol']} on/after {p['buy_date']}")
+        gap = (after.index[0].date() - p["buy_date"]).days
+        if gap > MAX_PRICE_GAP_DAYS:
+            raise ValueError(f"No price for {p['symbol']} near {p['buy_date']}: the price history only starts on {after.index[0].date()} "
+                             f"({gap} days later). Enter the lot as qty and price, or add data/manual/{p['symbol']}.csv (Date,Close).")
         px = float(after.iloc[0])
         holdings.lots.append(Lot(p["symbol"], p["amount_inr"] / px, p["buy_date"], px))
     holdings.pending_amounts = []

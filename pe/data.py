@@ -42,6 +42,24 @@ def _download(tickers: list[str], start: str) -> pd.DataFrame:
     return close
 
 
+def splice_history(old: pd.Series, new: pd.Series, gap_days: int = 10) -> tuple[pd.Series, bool]:
+    """Keep older cached rows when a fresh download comes back starting later than the cache did.
+
+    Yahoo sometimes serves only the recent stub of a series it used to serve in full (SETFNIF50.NS and MID150BEES.NS
+    did in Nov 2026). Replacing the cache with the stub would silently erase the history every signal and backtest
+    needs. The older rows are rescaled by the median new/old ratio where the two overlap, so a split or dividend
+    re-adjustment in between does not leave a step. Returns (series, spliced?)."""
+    old, new = old.dropna(), new.dropna()
+    if old.empty or new.empty or new.index[0] <= old.index[0] + pd.Timedelta(days=gap_days):
+        return new, False
+    head = old[old.index < new.index[0]]
+    both = old.index.intersection(new.index)
+    k = float((new[both] / old[both]).median()) if len(both) else 1.0
+    if not np.isfinite(k) or k <= 0:
+        k = 1.0
+    return pd.concat([head * k, new]), True
+
+
 def fetch_closes(settings: Settings, refresh: bool = False) -> pd.DataFrame:
     """Return raw closes keyed by ticker (native currency)."""
     cfg = settings["data"]
@@ -66,6 +84,11 @@ def fetch_closes(settings: Settings, refresh: bool = False) -> pd.DataFrame:
             s = fresh[t].dropna() if t in fresh else pd.Series(dtype=float)
             p = _cache_path(settings, t)
             if not s.empty:
+                if p.exists():
+                    s, spliced = splice_history(_read_csv(p), s)
+                    if spliced:
+                        log.warning("%s: the download starts on %s, later than the cached history; kept the older cached rows",
+                                    t, fresh[t].dropna().index[0].date())
                 s.rename("Close").to_frame().rename_axis("Date").to_csv(p)
                 out[t] = s
             elif p.exists():
@@ -106,6 +129,38 @@ def drop_bad_prints(closes: pd.DataFrame, tol: float = 2.0) -> pd.DataFrame:
     return closes.mask(bad)
 
 
+def backfill_equivalents(settings: Settings, prices: dict[str, pd.Series], gap_days: int = 10) -> list[str]:
+    """Give a fund that tracks the same index as another (`equivalent_of`) the other's prices where its own are missing:
+    before its history starts, and after its feed stops.
+
+    The primary's prices are scaled to meet the fund's own (median ratio over the nearest 20 common days), so there is
+    no step at the join. Without this a holding with a short or dead price feed is valued at a stale figure and cannot
+    be sold in a backtest. Returns the symbols that were filled."""
+    done = []
+    for sym, a in settings.assets.items():
+        prim = a.equivalent_of
+        if not prim or sym not in prices or prim not in prices:
+            continue
+        own, ref = prices[sym].dropna(), prices[prim].dropna()
+        both = own.index.intersection(ref.index)
+        if own.empty or ref.empty or not len(both):
+            continue
+        s, how = prices[sym].copy(), []
+        if own.index[0] > ref.index[0] + pd.Timedelta(days=gap_days):
+            early = s.index < own.index[0]
+            s[early] = prices[prim][early] * float((own[both[:20]] / ref[both[:20]]).median())
+            how.append(f"history before {own.index[0].date()}")
+        late = (s.index > own.index[-1]) & prices[prim].notna()
+        if late.any():
+            s[late] = prices[prim][late] * float((own[both[-20:]] / ref[both[-20:]]).median())
+            how.append(f"prices after {own.index[-1].date()}")
+        if how:
+            prices[sym] = s
+            done.append(sym)
+            log.warning("%s: %s taken from %s (same index), scaled to match", sym, " and ".join(how), prim)
+    return done
+
+
 def build_prices(settings: Settings, closes: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series | None]:
     """INR prices per symbol on the NSE calendar, plus India VIX if available."""
     cfg = settings["data"]
@@ -129,6 +184,7 @@ def build_prices(settings: Settings, closes: pd.DataFrame) -> tuple[pd.DataFrame
             s = s * filled[cfg["fx_ticker"]]
             s = apply_dividend_drag(settings, a, s)
         prices[sym] = s
+    backfill_equivalents(settings, prices)
     px = pd.DataFrame(prices, index=cal)
     px["CASH"] = cash_series(cal, settings["cash"]["rate"])
     vix = filled[cfg["vix_ticker"]] if cfg["vix_ticker"] in filled else None
