@@ -1,7 +1,7 @@
 """Walk-forward backtest that runs the exact live planner day by day, with lots, Indian tax and costs.
 
 Signals use data up to the close of the check day; orders fill at later closes per the
-execution mode. Tax for each FY is paid out of the portfolio on the last trading day of
+execution mode (never on the signal day itself). Tax for each FY is paid out of the portfolio on the last trading day of
 March. At the end we report NAV, tax accrued on gains realised in the current FY, and the
 value if everything were sold on the last day ("liquidation value").
 """
@@ -130,6 +130,9 @@ def run_variant(name, policy, execution, harvest, init_lots, px, vix, settings: 
                                        "window_days": opts.get("window_days", settings.timing["window_days"]),
                                        "ltcg_wait_max_days": opts.get("ltcg_wait_max_days", settings.timing["ltcg_wait_max_days"])})
     idx = px.index[px.index >= start]
+    # Valuation carries the last known price over a gap (causal). Marking a holding at what was paid whenever a price is
+    # missing would freeze it and then jump when prices return. Fills still need a real price on the day (see below).
+    val = px.ffill()
     tm = settings.timing
     checks = _check_days(idx, tm["check_frequency"])
     guarded = policy.endswith("+guard")
@@ -157,6 +160,8 @@ def run_variant(name, policy, execution, harvest, init_lots, px, vix, settings: 
         for leg in sorted(pending, key=lambda l: l.trade.side != "sell"):
             t = leg.trade
             p = float(row[t.symbol])
+            if p != p:        # no price today (suspended, or a gap in the data): the order waits for the next real price
+                continue
             if leg.mode == "secretary":
                 leg.observed.append(p)
                 funded = t.side == "sell" or not any(l.trade.side == "sell" and l.done_frac < 1 for l in pending)
@@ -211,7 +216,7 @@ def run_variant(name, policy, execution, harvest, init_lots, px, vix, settings: 
                 reg = plan.target.regime or {}
                 tw = plan.target.weights or {}
                 book.journal.append({
-                    "date": str(day), "nav": round(_nav(book, row)), "regime": reg.get("label", ""),
+                    "date": str(day), "nav": round(_nav(book, val.loc[ts])), "regime": reg.get("label", ""),
                     "regime_why": " ".join(reg.get("why", [])), "target": {k: round(v, 4) for k, v in sorted(tw.items(), key=lambda kv: -kv[1]) if v > 0.004},
                     "strategy_why": [w for w in plan.target.why[1:]][:4],
                     "trades": [{"side": t.side, "symbol": t.symbol, "value": round(t.value), "kind": t.kind, "tax": round(t.tax_now), "cost": round(t.cost),
@@ -220,9 +225,9 @@ def run_variant(name, policy, execution, harvest, init_lots, px, vix, settings: 
                 book.log.append((day, "HOLD", b))
             for d in plan.deferred:
                 book.log.append((day, "WAIT", d))
-        navs.append(_nav(book, row))
+        navs.append(_nav(book, val.loc[ts]))
     nav = pd.Series(navs, index=idx, name=name)
-    last = px.loc[idx[-1]]
+    last = val.loc[idx[-1]]
     accrued = compute_tax(book.fy_realised, settings).tax
     unreal = {b: 0.0 for b in BUCKETS}
     for l in book.lots:
