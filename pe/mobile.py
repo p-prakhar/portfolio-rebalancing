@@ -462,7 +462,9 @@ def _replay(demo: bool) -> dict:
         r.update(symbol=t.symbol, value=round(t.value), kind=t.kind, qty=t.qty,
                  never_waits=bool(t.kind == "risk_exit" and tm["regime_override_secretary"]))
         if r["never_waits"]:
-            r["now"].update(decision="execute", reason="risk_exit", why="This trade cuts risk, so it never waits for a better price.")
+            # no rule day to mark: the trade is placed at once, whatever the window's prices did
+            r["now"].update(decision="execute", reason="risk_exit", why="This trade cuts risk, so it never waits for a better price.",
+                            fired=None, fired_i=None, fill=None)
         out["legs"].append(r)
     acts = [l for l in out["legs"] if l["now"]["decision"] == "execute"]
     waits = [l for l in out["legs"] if l["now"]["decision"] != "execute"]
