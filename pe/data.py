@@ -30,7 +30,16 @@ def _read_csv(path: Path) -> pd.Series:
 
 
 def _download(tickers: list[str], start: str) -> pd.DataFrame:
-    import yfinance as yf  # imported lazily so offline/demo mode needs no network stack
+    import os
+    yf = None
+    if os.environ.get("PE_PRICE_SOURCE", "").lower() != "lite":
+        try:
+            import yfinance as yf  # imported lazily so offline/demo mode needs no network stack
+        except ImportError:
+            yf = None
+    if yf is None:      # no yfinance (it needs curl_cffi, which has no Android build): plain HTTP client
+        from . import yahoo_lite
+        return yahoo_lite.download(tickers, start)
 
     from . import quiet
     with quiet():

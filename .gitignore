@@ -21,3 +21,10 @@ config/fds.yaml
 *.pdf
 BenefitHistory*
 tradebook*.csv
+# Android app build output
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+screenshots/
+env.sh
