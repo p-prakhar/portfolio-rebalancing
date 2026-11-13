@@ -119,9 +119,9 @@ def _check_days(idx: pd.DatetimeIndex, freq: str) -> set:
     s = pd.Series(idx, index=idx)
     if freq == "annual_mar":        # once a year in March, before the Indian tax year closes
         s = s[s.dt.month == 3]
-        return set(s.groupby(s.dt.year).first().values)
+        return set(pd.DatetimeIndex(s.groupby(s.dt.year).first()))
     key = {"monthly": s.dt.to_period("M"), "weekly": s.dt.to_period("W"), "quarterly": s.dt.to_period("Q")}[freq]
-    return set(s.groupby(key).first().values)
+    return set(pd.DatetimeIndex(s.groupby(key).first()))
 
 
 def run_variant(name, policy, execution, harvest, init_lots, px, vix, settings: Settings, start, fx=None, opts: dict | None = None):

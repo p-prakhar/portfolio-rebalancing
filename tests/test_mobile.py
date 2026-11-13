@@ -233,3 +233,14 @@ def test_profile_help_is_a_list_for_the_phone(home):
     p = ok(call(home, "out = M.profile()"))
     assert [i["label"] for i in p["income_where_items"]][:2] == ["Gross salary", "RSU/ESPP perquisite"]
     assert all(i["lines"] and "  " not in " ".join(i["lines"]) for i in p["income_where_items"])
+
+
+def test_check_days_hold_timestamps():
+    # older pandas turns .values into numpy datetimes, which never equal a Timestamp: no check day would ever match
+    import pandas as pd
+    from pe.backtest import _check_days
+    idx = pd.bdate_range("2024-01-01", "2024-06-30")
+    for freq in ("monthly", "weekly", "quarterly", "annual_mar"):
+        days = _check_days(idx, freq)
+        assert days and all(type(d) is pd.Timestamp and d in days for d in days), freq
+        assert idx[0] in days or freq == "annual_mar"

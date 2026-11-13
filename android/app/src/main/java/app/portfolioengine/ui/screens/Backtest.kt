@@ -283,7 +283,7 @@ private fun StrategyRow(r: JSONObject, mine: JSONObject, top: Double, selected: 
         Spacer(Modifier.height(4.dp))
         val diff = r.num("after_tax_value") - mine.num("after_tax_value")
         val parts = buildList {
-            if (!isMine) add(if (kotlin.math.abs(diff) < 1) "Same as what you did" else "${Fmt.signedInrShort(diff)} against what you did")
+            if (!isMine) add(if (kotlin.math.abs(diff) < 1) "Same as you" else "${Fmt.inrShort(kotlin.math.abs(diff))} ${if (diff >= 0) "ahead" else "behind"}")
             add("worst fall ${Fmt.pct(-r.num("max_drawdown"), 0)}")
             add(r.int("trades").let { if (it == 0) "no trades" else "$it trade${if (it == 1) "" else "s"}" })
         }
