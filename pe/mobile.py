@@ -381,6 +381,142 @@ def reset_window():
     return True
 
 
+# ---------------------------------------------------------------- backtest on your own lots, and the replayed waiting window
+_BT: dict = {}      # the prepared backtest (prices, lots, start day) kept between calls so each strategy can report as it finishes
+
+
+def _bt_context(p: dict) -> dict:
+    from . import replay
+    demo, rng = bool(p.get("demo")), str(p.get("range") or "purchase")
+    key = (demo, rng, HOLDINGS.stat().st_mtime if HOLDINGS.exists() else 0, json.dumps(_app_state(), sort_keys=True))
+    if _BT.get("key") == key:
+        return _BT
+    m, settings, prof, tax_note, h, px, vix, fx, note, usd, warns = _context(demo, False)
+    lots = [l for l in h.lots if l.symbol in settings.assets and l.qty > 0]
+    if not lots:
+        raise ApiError("no_holdings", "The backtest needs at least one holding with a purchase date.")
+    try:
+        ctx = replay.prepare(lots, px, rng)
+    except ValueError:
+        raise ApiError("no_prices", "There is not enough price history yet to replay your purchases.")
+    _BT.clear()
+    _BT.update(key=key, ctx=ctx, vix=vix, fx=fx, settings=settings, note=note, warns=warns, cash=float(h.cash_inr or 0))
+    return _BT
+
+
+@api
+def backtest_setup(payload=None):
+    """Prepare a replay of the investor's own purchases. payload: {range: purchase | 1y | 6m, demo?}.
+    Returns the dates, the money put in over time and the list of strategies; call backtest_run(id) for each."""
+    from . import replay
+    bt = _bt_context(_arg(payload))
+    out = replay.setup_view(bt["ctx"])
+    out.update(data_note=bt["note"], warnings=bt["warns"], cash_left_out=round(bt["cash"]), current_policy=_settings().strategy["policy"])
+    return out
+
+
+@api
+def backtest_run(strategy_id, payload=None):
+    """One strategy over the prepared replay: value curve, after-tax result, where the money sat and how much moved each month."""
+    from . import replay
+    bt = _bt_context(_arg(payload))
+    try:
+        return replay.run_strategy(bt["ctx"], str(strategy_id), bt["vix"], bt["settings"], bt["fx"])
+    except ValueError as exc:
+        raise ApiError("invalid", str(exc))
+
+
+def _replay(demo: bool) -> dict:
+    from . import replay
+    from .engine import make_plan
+    m, settings, prof, tax_note, h, px, vix, fx, note, usd, warns = _context(demo, False)
+    tm = settings.timing
+    n = int(tm["window_days"])
+    realised = m._fy_realised(h, prof)
+    mem = dict(m.guard_mem_load())
+    plan = make_plan(px.index[-1], h.lots, h.cash_inr, px, vix, settings, realised, lrs_used=h.lrs_remitted_this_fy_inr, usd_inr=usd, guard_mem=dict(mem))
+    legs = [t for t in plan.trades if not t.kind.startswith("harvest") and t.symbol != "CASH" and t.symbol in px]
+    out = {"asof": str(px.index[-1].date()), "n": n, "cutoff": replay.secretary_cutoff(n), "execution": tm.get("execution", "secretary"),
+           "legs": [], "data_note": note, "window_open": m.STATE.exists()}
+    if not legs:
+        out.update(decision="none", headline="Nothing is waiting", detail="Today's plan has no trade that would use a waiting window.")
+        return out
+    days = px.index[-n:]
+    on_plan: dict[tuple, list[bool]] = {(t.symbol, t.side): [] for t in legs}
+    for ts in days[:-1]:        # what the daily check would have said on each earlier day, with the lots owned and data known that day
+        try:
+            lots_then = [l for l in h.lots if l.buy_date <= ts.date()]
+            fxv = float(fx.loc[:ts].dropna().iloc[-1]) if fx is not None and not fx.loc[:ts].dropna().empty else usd
+            pl = make_plan(ts, lots_then, h.cash_inr, px.loc[:ts], vix.loc[:ts] if vix is not None else None, settings, realised,
+                           lrs_used=h.lrs_remitted_this_fy_inr, usd_inr=fxv, guard_mem=dict(mem))
+            asked = {(t.symbol, t.side) for t in pl.trades if not t.kind.startswith("harvest")}
+        except Exception:
+            asked = set()
+        for k in on_plan:
+            on_plan[k].append(k in asked)
+    for t in legs:
+        series = px[t.symbol].ffill().loc[days]
+        if series.isna().any():
+            continue
+        r = replay.replay_leg([str(d.date()) for d in days], [float(v) for v in series], on_plan[(t.symbol, t.side)] + [True], n, t.side)
+        r.update(symbol=t.symbol, value=round(t.value), kind=t.kind, qty=t.qty,
+                 never_waits=bool(t.kind == "risk_exit" and tm["regime_override_secretary"]))
+        if r["never_waits"]:
+            # no rule day to mark: the trade is placed at once, whatever the window's prices did
+            r["now"].update(decision="execute", reason="risk_exit", why="This trade cuts risk, so it never waits for a better price.",
+                            fired=None, fired_i=None, fill=None)
+        out["legs"].append(r)
+    acts = [l for l in out["legs"] if l["now"]["decision"] == "execute"]
+    waits = [l for l in out["legs"] if l["now"]["decision"] != "execute"]
+    if not out["legs"]:
+        out.update(decision="none", headline="Nothing is waiting", detail="The trades on today's plan have no recent prices to replay.")
+    elif not waits:
+        out.update(decision="execute", headline="No need to wait: place the trades today",
+                   detail="Replayed over the days already gone, every waiting window has reached its trading day.")
+    elif not acts:
+        left = max(l["now"]["left"] for l in waits)
+        out.update(decision="observe", headline=f"Keep watching: {left} trading day{'s' if left != 1 else ''} left at most",
+                   detail="The plan only began asking for these trades recently, so the days already gone do not complete the window. "
+                          "You can still count the full window from past prices below.")
+    else:
+        out.update(decision="mixed", headline=f"Place {len(acts)} of {len(out['legs'])} today, keep watching the rest",
+                   detail="Sells and buys are judged one by one. Buys that depend on a sale should wait for that sale.")
+    return out
+
+
+@api
+def secretary_replay(payload=None):
+    """Where the waiting window would stand today had the check been run every day. payload: {demo?}. Changes nothing."""
+    return _replay(bool(_arg(payload).get("demo")))
+
+
+@api
+def backdate_window(payload=None):
+    """Open (or replace) the waiting window as if it had started in the past, with the closes since then filled in.
+    payload: {mode: now | full, demo?}. `now` starts each trade's window on the day the plan first asked for it; `full`
+    counts the whole window from the last n closes. The next check then reads the window like any other."""
+    p = _arg(payload)
+    full = str(p.get("mode") or "now") == "full"
+    r = _replay(bool(p.get("demo")))
+    if not r["legs"]:
+        raise ApiError("invalid", "Today's plan has no trade that is waiting.")
+    m = _main()
+    legs, opened = [], r["asof"]
+    for l in r["legs"]:
+        w = l["full"] if full else l["now"]
+        first = l["dates"].index(w["opened"])
+        opened = min(opened, w["opened"])
+        leg = {"symbol": l["symbol"], "side": l["side"], "value": l["value"], "kind": l["kind"],
+               "observed": {d: pr for d, pr in zip(l["dates"][first:], l["prices"][first:])}}
+        if w["decision"] == "execute" and w.get("fired"):
+            leg["fired"] = w["fired"]
+        legs.append(leg)
+    _ensure_dirs()
+    m.STATE.write_text(json.dumps({"opened": opened, "n": r["n"], "legs": legs, "replayed": True}, indent=1))
+    LAST.unlink(missing_ok=True)
+    return {"opened": opened, "legs": len(legs), "mode": "full" if full else "now"}
+
+
 # ---------------------------------------------------------------- holdings
 def _asset_names() -> dict:
     s = load_settings()
@@ -930,7 +1066,7 @@ def export_backup(dest):
 
 # ---------------------------------------------------------------- profile, other assets, deposits
 def _profile_view() -> dict:
-    from .profile import INCOME_WHERE, RISK_LEVELS, Profile, emergency_months, load_profile, marginal_slab
+    from .profile import INCOME_WHERE, INCOME_WHERE_ITEMS, RISK_LEVELS, Profile, emergency_months, load_profile, marginal_slab
     p = load_profile()
     cur = p or Profile()
     has_income = (cur.gross_salary_inr + cur.rsu_perquisite_inr + cur.other_income_inr) > 0
@@ -938,7 +1074,7 @@ def _profile_view() -> dict:
     return {"exists": p is not None, "profile": dict(cur.__dict__), "equity_cap": cur.equity_cap(), "risk_levels": list(RISK_LEVELS),
             "tax_note": marginal_slab(cur)[2] if has_income else None, "emergency_months": months,
             "emergency_note": why.replace(" in the shell's profile command", "").replace("say yes to 'count backups'", "switch on 'Count my backups'"),
-            "income_where": INCOME_WHERE}
+            "income_where": INCOME_WHERE, "income_where_items": [{"label": k, "lines": v} for k, v in INCOME_WHERE_ITEMS]}
 
 
 @api

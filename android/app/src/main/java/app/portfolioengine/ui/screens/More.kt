@@ -98,6 +98,8 @@ fun MoreTab(vm: MainViewModel, state: UiState, go: (String) -> Unit) {
         }
         SectionTitle("Understand")
         AppCard {
+            LinkRow("Backtest on my holdings", "How each strategy would have done with your money since you bought, in charts") { go(Routes.BACKTEST) }
+            Rule()
             LinkRow("Reports", "Track record, every asset class compared, crash guard, gold prices") { go(Routes.REPORTS) }
             Rule()
             LinkRow("Strategy and settings", "How the engine decides, and the daily check") { go(Routes.SETTINGS) }
@@ -241,7 +243,7 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                 }
             }
             Spacer(Modifier.height(8.dp))
-            Muted("Changing the strategy changes the plan, not your holdings. Each one is judged over 10 years in the full report.")
+            Muted("Changing the strategy changes the plan, not your holdings. Each one is judged over 10 years in the full report, and Backtest on my holdings under More replays them on your own purchases.")
             Spacer(Modifier.height(32.dp))
         }
     }

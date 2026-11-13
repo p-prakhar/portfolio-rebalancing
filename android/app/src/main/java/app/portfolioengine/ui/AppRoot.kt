@@ -46,6 +46,7 @@ import app.portfolioengine.MainViewModel
 import app.portfolioengine.ui.components.AppButton
 import app.portfolioengine.ui.components.Muted
 import app.portfolioengine.ui.screens.AddHoldingScreen
+import app.portfolioengine.ui.screens.BacktestScreen
 import app.portfolioengine.ui.screens.DepositsScreen
 import app.portfolioengine.ui.screens.ImportScreen
 import app.portfolioengine.ui.screens.MoreTab
@@ -56,6 +57,7 @@ import app.portfolioengine.ui.screens.OtherAssetsScreen
 import app.portfolioengine.ui.screens.PlanTab
 import app.portfolioengine.ui.screens.PortfolioTab
 import app.portfolioengine.ui.screens.ProfileScreen
+import app.portfolioengine.ui.screens.ReplayScreen
 import app.portfolioengine.ui.screens.ReportsScreen
 import app.portfolioengine.ui.screens.SettingsScreen
 import app.portfolioengine.ui.screens.StarterScreen
@@ -75,6 +77,8 @@ object Routes {
     const val REPORTS = "reports"
     const val SETTINGS = "settings"
     const val SOURCES = "sources"
+    const val BACKTEST = "backtest"
+    const val REPLAY = "replay"
     fun guide(id: String) = "guide/$id"
     fun web(path: String, title: String, scripts: Boolean) = "web?path=${Uri.encode(path)}&title=${Uri.encode(title)}&scripts=$scripts"
 }
@@ -154,6 +158,8 @@ private fun AppNav(vm: MainViewModel, nav: NavHostController) {
         composable(Routes.OTHERS) { OtherAssetsScreen(vm, onBack = back) }
         composable(Routes.REPORTS) { ReportsScreen(vm, onBack = back, open = { p, t, s -> nav.navigate(Routes.web(p, t, s)) }) }
         composable(Routes.SETTINGS) { SettingsScreen(vm, onBack = back) }
+        composable(Routes.BACKTEST) { BacktestScreen(vm, onBack = back) }
+        composable(Routes.REPLAY) { ReplayScreen(vm, onBack = back) }
         composable(
             "web?path={path}&title={title}&scripts={scripts}",
             arguments = listOf(
@@ -195,7 +201,7 @@ private fun Home(vm: MainViewModel, nav: NavHostController) {
         Box(Modifier.fillMaxSize().padding(pad)) {
             when (tab) {
                 0 -> TodayTab(vm, state, openPlan = { tab = 1 }, go = go)
-                1 -> PlanTab(vm, state)
+                1 -> PlanTab(vm, state, go)
                 2 -> PortfolioTab(vm, state, go)
                 else -> MoreTab(vm, state, go)
             }

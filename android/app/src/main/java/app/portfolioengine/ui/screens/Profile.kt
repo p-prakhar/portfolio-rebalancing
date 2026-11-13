@@ -36,7 +36,9 @@ import app.portfolioengine.model.bool
 import app.portfolioengine.model.int
 import app.portfolioengine.model.num
 import app.portfolioengine.model.obj
+import app.portfolioengine.model.objects
 import app.portfolioengine.model.str
+import app.portfolioengine.model.strings
 import app.portfolioengine.ui.components.ActionBar
 import app.portfolioengine.ui.components.AmountField
 import app.portfolioengine.ui.components.AppCard
@@ -134,7 +136,22 @@ fun ProfileScreen(vm: MainViewModel, onBack: () -> Unit) {
             Money(f, "carried_lt_loss_inr", "Long-term capital loss carried forward", "Last ITR, Schedule CFL")
             if (v.str("tax_note").isNotEmpty()) Muted(v.str("tax_note"))
             AppCard(Modifier.padding(top = 8.dp)) {
-                Disclosure("Where to find these numbers") { Text(v.str("income_where"), style = MaterialTheme.typography.bodyMedium) }
+                Disclosure("Where to find these numbers") {
+                    val items = v.objects("income_where_items")
+                    if (items.isEmpty()) {
+                        Text(v.str("income_where"), style = MaterialTheme.typography.bodyMedium)
+                    } else {
+                        // a label with its sources underneath: columns do not fit a phone
+                        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            for (item in items) {
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(item.str("label"), style = MaterialTheme.typography.titleSmall)
+                                    for (line in item.strings("lines")) Muted(line)
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             SectionTitle("Employer stock")

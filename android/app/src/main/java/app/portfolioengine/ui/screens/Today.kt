@@ -43,6 +43,7 @@ import app.portfolioengine.ui.components.Bullets
 import app.portfolioengine.ui.components.BusyLine
 import app.portfolioengine.ui.components.Disclosure
 import app.portfolioengine.ui.components.EmptyState
+import app.portfolioengine.ui.components.HeroNumber
 import app.portfolioengine.ui.components.LevelDot
 import app.portfolioengine.ui.components.Muted
 import app.portfolioengine.ui.components.Pill
@@ -87,6 +88,7 @@ fun TodayTab(vm: MainViewModel, state: UiState, openPlan: () -> Unit, go: (Strin
                 return@Column
             }
 
+            HeroNumber("Your portfolio", Fmt.inrShort(d.num("nav")), Modifier.padding(top = 4.dp, bottom = 16.dp))
             Verdict(d, openPlan)
 
             val warnings = d.strings("warnings")
@@ -123,6 +125,12 @@ fun TodayTab(vm: MainViewModel, state: UiState, openPlan: () -> Unit, go: (Strin
                     // same order as "Now" so a colour means the same thing in both bars
                     AllocationBar(current.map { (k, _) -> k to (target.firstOrNull { it.first == k }?.second ?: 0.0) } + target.filter { t -> current.none { it.first == t.first } })
                 }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            AppCard(onClick = { go(Routes.BACKTEST) }) {
+                Text("See it on your own history", style = MaterialTheme.typography.titleMedium)
+                Muted("How each strategy would have done with your money since the day you bought, after fees and tax.")
             }
 
             val guards = d.objects("guardrails")
@@ -182,7 +190,6 @@ private fun Verdict(d: JSONObject, openPlan: () -> Unit) {
         Bullets(v.strings("reasons"))
         Spacer(Modifier.height(16.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Stat("Portfolio", Fmt.inrShort(d.num("nav")), Modifier.weight(1.2f))
             Stat("Fees if you act", Fmt.inr(v.num("cost")), Modifier.weight(1f))
             Stat("Tax if you act", Fmt.inr(v.num("tax")), Modifier.weight(1f))
         }

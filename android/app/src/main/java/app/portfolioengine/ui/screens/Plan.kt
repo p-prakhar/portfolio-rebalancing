@@ -36,6 +36,7 @@ import app.portfolioengine.model.obj
 import app.portfolioengine.model.objects
 import app.portfolioengine.model.str
 import app.portfolioengine.model.strings
+import app.portfolioengine.ui.Routes
 import app.portfolioengine.ui.components.AppCard
 import app.portfolioengine.ui.components.AppTextButton
 import app.portfolioengine.ui.components.Bullets
@@ -43,6 +44,8 @@ import app.portfolioengine.ui.components.BusyLine
 import app.portfolioengine.ui.components.DateField
 import app.portfolioengine.ui.components.Disclosure
 import app.portfolioengine.ui.components.EmptyState
+import app.portfolioengine.ui.components.FlowNode
+import app.portfolioengine.ui.components.MoneyFlow
 import app.portfolioengine.ui.components.Muted
 import app.portfolioengine.ui.components.NumberField
 import app.portfolioengine.ui.components.SectionTitle
@@ -54,7 +57,7 @@ import java.time.LocalDate
 
 /** Tab 2: the trades, why each one, what it costs, and the order to do them in. */
 @Composable
-fun PlanTab(vm: MainViewModel, state: UiState) {
+fun PlanTab(vm: MainViewModel, state: UiState, go: (String) -> Unit) {
     val d = state.check
     var marking by remember { mutableStateOf<JSONObject?>(null) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
@@ -84,6 +87,21 @@ fun PlanTab(vm: MainViewModel, state: UiState) {
                     Text("When to place them", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(8.dp))
                     Bullets(timing)
+                    if (!hold && timing.any { it.contains("wait", ignoreCase = true) }) {
+                        Spacer(Modifier.height(12.dp))
+                        Muted("The waiting can be worked out from prices already seen, instead of from days still to come.")
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(onClick = { go(Routes.REPLAY) }) { Text("Skip the wait") }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+            val (sold, bought) = flowNodes(trades)
+            if (sold.isNotEmpty() && bought.isNotEmpty()) {
+                AppCard {
+                    Text("Where the money moves", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(10.dp))
+                    MoneyFlow(sold, bought)
                 }
                 Spacer(Modifier.height(12.dp))
             }
@@ -179,6 +197,22 @@ private fun TradeCard(t: JSONObject, onDone: () -> Unit) {
             AppTextButton(onClick = onDone, modifier = Modifier.align(Alignment.End)) { Text("I placed this") }
         }
     }
+}
+
+/** Sells and buys of the plan as two columns with equal totals; cash absorbs whatever one side has over the other. Tax harvests sell and re-buy the same thing, so they move no money. */
+private fun flowNodes(trades: List<JSONObject>): Pair<List<FlowNode>, List<FlowNode>> {
+    val real = trades.filter { !it.str("kind").startsWith("harvest") }
+    val sold = real.filter { it.str("side") == "sell" }.groupBy { it.str("symbol") }.map { (k, v) -> FlowNode(k, v.sumOf { it.num("value") }) }.sortedByDescending { it.value }.toMutableList()
+    val bought = real.filter { it.str("side") == "buy" }.groupBy { it.str("symbol") }.map { (k, v) -> FlowNode(if (k == "CASH") "Cash" else k, v.sumOf { it.num("value") }) }.sortedByDescending { it.value }.toMutableList()
+    val gap = sold.sumOf { it.value } - bought.sumOf { it.value }
+    val floor = 0.01 * maxOf(sold.sumOf { it.value }, bought.sumOf { it.value })
+    if (gap > floor) {
+        val i = bought.indexOfFirst { it.label == "Cash" }
+        if (i >= 0) bought[i] = FlowNode("Cash", bought[i].value + gap) else bought.add(FlowNode("Cash", gap))
+    } else if (-gap > floor) {
+        sold.add(FlowNode("Cash", -gap))
+    }
+    return sold to bought
 }
 
 private fun kindLabel(kind: String): String = when (kind) {

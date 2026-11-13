@@ -17,8 +17,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// Tokens. Warm neutrals with one deep green accent. BUY and SELL keep their own green and red everywhere,
-// and the categorical series colours are used in this fixed order (same rule as the HTML report).
+// Tokens. Warm neutrals with one deep green accent. BUY and SELL keep their own green and red everywhere.
+// The categorical series colours are used in this fixed order, never cycled. The order is checked for colour-blind and
+// normal-vision separation between neighbours on both surfaces; each sleeve owns one slot (see sleeveSlot in Charts.kt).
 private val Light = lightColorScheme(
     primary = Color(0xFF1F5A4C), onPrimary = Color(0xFFFFFFFF),
     primaryContainer = Color(0xFFDCEBE5), onPrimaryContainer = Color(0xFF0E3229),
@@ -63,13 +64,13 @@ private val LightTokens = Tokens(
     buy = Color(0xFF1B7F4B), buyContainer = Color(0xFFDDF1E5),
     sell = Color(0xFFB83A2E), sellContainer = Color(0xFFF8E0DC),
     warn = Color(0xFF8A6A1F), warnContainer = Color(0xFFF6EBCB),
-    series = listOf(Color(0xFF1F5A4C), Color(0xFFC98A1B), Color(0xFF3F6FB5), Color(0xFF9B4F7A), Color(0xFF6B7F2A), Color(0xFF8A8780)),
+    series = listOf(Color(0xFF2A78D6), Color(0xFFEB6834), Color(0xFF1BAF7A), Color(0xFFEDA100), Color(0xFFE87BA4), Color(0xFF008300), Color(0xFF6250D6), Color(0xFFE34948)),
 )
 private val DarkTokens = Tokens(
     buy = Color(0xFF7BD3A0), buyContainer = Color(0xFF173D2A),
     sell = Color(0xFFF0958A), sellContainer = Color(0xFF4A1D18),
     warn = Color(0xFFE3C16F), warnContainer = Color(0xFF4A3A12),
-    series = listOf(Color(0xFF8FCDBB), Color(0xFFE3B55A), Color(0xFF8FB3EA), Color(0xFFD59ABB), Color(0xFFB5C977), Color(0xFFA9A69E)),
+    series = listOf(Color(0xFF3987E5), Color(0xFFD95926), Color(0xFF199E70), Color(0xFFC98500), Color(0xFFD55181), Color(0xFF008300), Color(0xFF9085E9), Color(0xFFE66767)),
 )
 
 val LocalTokens = staticCompositionLocalOf { LightTokens }

@@ -72,15 +72,19 @@ SLABS = {"new": [(400000, 0.0), (800000, 0.05), (1200000, 0.10), (1600000, 0.15)
          "old": [(250000, 0.0), (500000, 0.05), (1000000, 0.20), (float("inf"), 0.30)]}
 STD_DEDUCTION = {"new": 75000, "old": 50000}
 REBATE_LIMIT = {"new": 1200000, "old": 500000}
-INCOME_WHERE = """Where to find your income figures
-  Gross salary          Form 16 Part B (from your employer each June), or 12 x the monthly gross on your payslip.
-  RSU/ESPP perquisite   Payslip lines like "RSU perquisite" or "Stock perq"; Form 16 Part B, perquisites under 17(2).
-                        E*TRADE Benefit History shows each vest's value in dollars too.
-  Other income          incometax.gov.in > AIS (Annual Information Statement): bank interest, dividends, with TDS already cut.
-                        Form 26AS on the same portal shows the TDS credits.
-  Regime                Form 16 says whether your employer used the new or old regime; new is the default.
-  Deductions (old only) Form 16 Part B, Chapter VI-A (80C, 80D...), HRA and home-loan interest.
-  Carried-forward loss  Your last ITR, Schedule CFL, columns for short-term and long-term capital loss."""
+INCOME_WHERE_ITEMS = [
+    ("Gross salary", ["Form 16 Part B (from your employer each June), or 12 x the monthly gross on your payslip."]),
+    ("RSU/ESPP perquisite", ['Payslip lines like "RSU perquisite" or "Stock perq"; Form 16 Part B, perquisites under 17(2).',
+                             "E*TRADE Benefit History shows each vest's value in dollars too."]),
+    ("Other income", ["incometax.gov.in > AIS (Annual Information Statement): bank interest, dividends, with TDS already cut.",
+                      "Form 26AS on the same portal shows the TDS credits."]),
+    ("Regime", ["Form 16 says whether your employer used the new or old regime; new is the default."]),
+    ("Deductions (old only)", ["Form 16 Part B, Chapter VI-A (80C, 80D...), HRA and home-loan interest."]),
+    ("Carried-forward loss", ["Your last ITR, Schedule CFL, columns for short-term and long-term capital loss."]),
+]
+# the terminal shows the same items as aligned columns; the app lays them out as a list (a phone is too narrow for columns)
+INCOME_WHERE = "Where to find your income figures\n" + "\n".join(
+    f"  {label:<22}{lines[0]}" + "".join(f"\n{'':24}{more}" for more in lines[1:]) for label, lines in INCOME_WHERE_ITEMS)
 
 
 def taxable_income(p: Profile) -> float:
